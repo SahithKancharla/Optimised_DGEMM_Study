@@ -1,0 +1,241 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <omp.h>
+#include <string.h>
+#include <time.h>
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <unistd.h>
+
+#define RUNS 10
+#define DISCARD 2
+
+extern double* mm_naive(int nthreads, int rows, int cols_a, int cols_b);
+extern double* mm_blocked(int nthreads, int rows, int cols_a, int cols_b);
+extern double* mm_strassen(int nthreads, int rows, int cols_a, int cols_b);
+extern double* mm_naive_unrolled(int nthreads, int rows, int cols_a, int cols_b);
+extern double* mm_blocked_unrolled(int nthreads, int rows, int cols_a, int cols_b);
+extern double* mm_strassen_unrolled(int nthreads, int rows, int cols_a, int cols_b);
+extern double* mm_strassen_naive(int nthreads, int rows, int cols_a, int cols_b);
+
+int compare(const void *a, const void *b) {
+    double da = *(const double *)a;
+    double db = *(const double *)b;
+    return (da > db) - (da < db);
+}
+
+void prepare_output_dirs() {
+    system("rm -rf Values");
+    mkdir("Values", 0777);
+    mkdir("Results", 0777);
+}
+
+void initialize_and_write_matrices(int rows, int cols_a, int cols_b) {
+    double *a = (double *)malloc(rows * cols_a * sizeof(double));
+    double *b = (double *)malloc(cols_a * cols_b * sizeof(double));
+
+    if (!a || !b) {
+        fprintf(stderr, "Memory allocation failed for matrices.\n");
+        exit(1);
+    }
+
+    #pragma omp parallel for collapse(2) schedule(static)
+    for (int i = 0; i < rows; i++) {
+        for (int j = 0; j < cols_a; j++) {
+            a[i * cols_a + j] = i + j;
+        }
+    }
+
+    #pragma omp parallel for collapse(2) schedule(static)
+    for (int i = 0; i < cols_a; i++) {
+        for (int j = 0; j < cols_b; j++) {
+            b[i * cols_b + j] = i * j;
+        }
+    }
+
+    FILE *fa = fopen("Data/matrix_a.bin", "wb");
+    FILE *fb = fopen("Data/matrix_b.bin", "wb");
+
+    if (!fa || !fb) {
+        fprintf(stderr, "Failed to open file for writing matrices.\n");
+        exit(1);
+    }
+
+    fwrite(a, sizeof(double), rows * cols_a, fa);
+    fwrite(b, sizeof(double), cols_a * cols_b, fb);
+
+    fclose(fa);
+    fclose(fb);
+
+    free(a);
+    free(b);
+}
+
+void write_result_matrix(const char *filename, double *c, int rows, int cols) {
+    FILE *fr = fopen(filename, "w");
+    if (!fr) {
+        perror("Error opening result file for writing");
+        return;
+    }
+
+    for (int i = 0; i < rows; i++) {
+        for (int j = 0; j < cols; j++) {
+            fprintf(fr, "%f ", c[i * cols + j]);
+        }
+        fprintf(fr, "\n");
+    }
+
+    fclose(fr);
+}
+
+int read_all_times(const char *filename, double *times, int expected_runs) {
+    FILE *file = fopen(filename, "r");
+    if (!file) {
+        perror("Error opening time file");
+        return -1;
+    }
+    for (int i = 0; i < expected_runs; i++) {
+        if (fscanf(file, "%lf", &times[i]) != 1) {
+            fprintf(stderr, "Failed to read timing value %d from %s\n", i + 1, filename);
+            fclose(file);
+            return -1;
+        }
+    }
+    fclose(file);
+    return 0;
+}
+
+int main(int argc, char *argv[]) {
+    if (argc < 5) {
+        printf("Usage: %s <nthreads> <rows> <cols_a> <cols_b> [naive|naive_unrolled|blocked|blocked_unrolled|strassen|strassen_unrolled|all]\n", argv[0]);
+        return 1;
+    }
+
+    int nthreads = atoi(argv[1]);
+    int rows = atoi(argv[2]);
+    int cols_a = atoi(argv[3]);
+    int cols_b = atoi(argv[4]);
+    char *algorithm = (argc > 5) ? argv[5] : "all";
+
+    omp_set_num_threads(nthreads);
+
+    prepare_output_dirs();
+    initialize_and_write_matrices(rows, cols_a, cols_b);
+
+    double times[RUNS];
+    char result_filename[256];
+
+    if (strcmp(algorithm, "naive") == 0 || strcmp(algorithm, "all") == 0) {
+        double *c = NULL;
+        for (int run = 0; run < RUNS; run++) {
+            c = mm_naive(nthreads, rows, cols_a, cols_b);
+        }
+        if (read_all_times("Values/time_naive.txt", times, RUNS) == 0) {
+            qsort(times, RUNS, sizeof(double), compare);
+            double sum = 0.0;
+            for (int i = DISCARD; i < RUNS - DISCARD; i++) sum += times[i];
+            printf("Naive Average Time: %f seconds\n\n", sum / (RUNS - 2 * DISCARD));
+        }
+        snprintf(result_filename, sizeof(result_filename), "Results/result_naive_%d.txt", rows);
+        // write_result_matrix(result_filename, c, rows, cols_b);
+        free(c);
+    }
+
+    if (strcmp(algorithm, "naive_unrolled") == 0 || strcmp(algorithm, "all") == 0) {
+        double *c = NULL;
+        for (int run = 0; run < RUNS; run++) {
+            c = mm_naive_unrolled(nthreads, rows, cols_a, cols_b);
+        }
+        if (read_all_times("Values/time_naive_unrolled.txt", times, RUNS) == 0) {
+            qsort(times, RUNS, sizeof(double), compare);
+            double sum = 0.0;
+            for (int i = DISCARD; i < RUNS - DISCARD; i++) sum += times[i];
+            printf("Naive Unrolled Average Time: %f seconds\n\n", sum / (RUNS - 2 * DISCARD));
+        }
+        snprintf(result_filename, sizeof(result_filename), "Results/result_naive_unrolled_%d.txt", rows);
+        // write_result_matrix(result_filename, c, rows, cols_b);
+        free(c);
+    }
+
+    if (strcmp(algorithm, "blocked") == 0 || strcmp(algorithm, "all") == 0) {
+        double *c = NULL;
+        for (int run = 0; run < RUNS; run++) {
+            c = mm_blocked(nthreads, rows, cols_a, cols_b);
+        }
+        if (read_all_times("Values/time_blocked.txt", times, RUNS) == 0) {
+            qsort(times, RUNS, sizeof(double), compare);
+            double sum = 0.0;
+            for (int i = DISCARD; i < RUNS - DISCARD; i++) sum += times[i];
+            printf("Blocked Average Time: %f seconds\n\n", sum / (RUNS - 2 * DISCARD));
+        }
+        snprintf(result_filename, sizeof(result_filename), "Results/result_blocked_%d.txt", rows);
+        // write_result_matrix(result_filename, c, rows, cols_b);
+        free(c);
+    }
+
+    if (strcmp(algorithm, "blocked_unrolled") == 0 || strcmp(algorithm, "all") == 0) {
+        double *c = NULL;
+        for (int run = 0; run < RUNS; run++) {
+            c = mm_blocked_unrolled(nthreads, rows, cols_a, cols_b);
+        }
+        if (read_all_times("Values/time_blocked_unrolled.txt", times, RUNS) == 0) {
+            qsort(times, RUNS, sizeof(double), compare);
+            double sum = 0.0;
+            for (int i = DISCARD; i < RUNS - DISCARD; i++) sum += times[i];
+            printf("Blocked Unrolled Average Time: %f seconds\n\n", sum / (RUNS - 2 * DISCARD));
+        }
+        snprintf(result_filename, sizeof(result_filename), "Results/result_blocked_unrolled_%d.txt", rows);
+        // write_result_matrix(result_filename, c, rows, cols_b);
+        free(c);
+    }
+
+    if (strcmp(algorithm, "strassen_base") == 0 || strcmp(algorithm, "all") == 0) {
+        double *c = NULL;
+        for (int run = 0; run < RUNS; run++) {
+            c = mm_strassen(nthreads, rows, cols_a, cols_b);
+        }
+        if (read_all_times("Values/time_strassen.txt", times, RUNS) == 0) {
+            qsort(times, RUNS, sizeof(double), compare);
+            double sum = 0.0;
+            for (int i = DISCARD; i < RUNS - DISCARD; i++) sum += times[i];
+            printf("Strassen Average Time: %f seconds\n\n", sum / (RUNS - 2 * DISCARD));
+        }
+        snprintf(result_filename, sizeof(result_filename), "Results/result_strassen_%d.txt", rows);
+        // write_result_matrix(result_filename, c, rows, cols_b);
+        free(c);
+    }
+
+    if (strcmp(algorithm, "strassen_base_unrolled") == 0 || strcmp(algorithm, "all") == 0) {
+        double *c = NULL;
+        for (int run = 0; run < RUNS; run++) {
+            c = mm_strassen_unrolled(nthreads, rows, cols_a, cols_b);
+        }
+        if (read_all_times("Values/time_strassen_unrolled.txt", times, RUNS) == 0) {
+            qsort(times, RUNS, sizeof(double), compare);
+            double sum = 0.0;
+            for (int i = DISCARD; i < RUNS - DISCARD; i++) sum += times[i];
+            printf("Strassen Unrolled Average Time: %f seconds\n\n", sum / (RUNS - 2 * DISCARD));
+        }
+        snprintf(result_filename, sizeof(result_filename), "Results/result_strassen_unrolled_%d.txt", rows);
+        // write_result_matrix(result_filename, c, rows, cols_b);
+        free(c);
+    }
+
+    if (strcmp(algorithm, "strassen") == 0 || strcmp(algorithm, "all") == 0) {
+        double *c = NULL;
+        for (int run = 0; run < RUNS; run++) {
+            c = mm_strassen_naive(nthreads, rows, cols_a, cols_b);
+        }
+        if (read_all_times("Values/time_strassen_naive.txt", times, RUNS) == 0) {
+            qsort(times, RUNS, sizeof(double), compare);
+            double sum = 0.0;
+            for (int i = DISCARD; i < RUNS - DISCARD; i++) sum += times[i];
+            printf("Strassen Naive Average Time: %f seconds\n\n", sum / (RUNS - 2 * DISCARD));
+        }
+        snprintf(result_filename, sizeof(result_filename), "Results/result_strassen_naive_%d.txt", rows);
+        // write_result_matrix(result_filename, c, rows, cols_b);
+        free(c);
+    }
+
+    return 0;
+}
