@@ -1,9 +1,9 @@
 // matmul_double.c
-
+#include <immintrin.h>  // for _mm_prefetch, _MM_HINT_T0, AVX-512 intrinsics
 #include "kernel.h"
 #include <string.h>
 #include <omp.h>
-#include <immintrin.h>
+#include <x86intrin.h>
 
 #define min(x,y)      ((x) < (y) ? (x) : (y))
 
@@ -16,13 +16,14 @@
 #define NR 6
 
 // blocking parameters
-#define MC (MR * NTHREADS * 5)
-#define NC (NR * NTHREADS * 50)
-#define KC 1000
+#define MC (MR * NTHREADS * 10)
+#define NC (NR * NTHREADS * 100)
+#define KC 2048
 
 // packed buffers (double now)
 static double blockA_packed[MC * KC] __attribute__((aligned(64)));
 static double blockB_packed[NC * KC] __attribute__((aligned(64)));
+static inline int round_up_24(int n) { return (n + MR - 1) / MR * MR; }
 
 void pack_panelB(const double* B, double* blockB_p, int nr, int kc, int K) {
     for (int p = 0; p < kc; p++) {
@@ -72,38 +73,36 @@ void pack_blockA(const double* A, double* blockA_p, int mc, int kc, int M) {
     }
 }
 
-void matmul(double* A, double* B, double* C, int m, int n, int k) {
+void matmul(double *A, double *B, double *C, int N) {
     // zero C
-    memset(C, 0, (size_t)m * n * sizeof(double));
+    memset(C, 0, (size_t)N * N * sizeof(double));
 
-    for (int j = 0; j < n; j += NC) {
-        int nc = min(NC, n - j);
-        for (int p = 0; p < k; p += KC) {
-            int kc = min(KC, k - p);
+    for (int j = 0; j < N; j += NC) {
+        int nc = (N - j < NC ? N - j : NC);
+        for (int p = 0; p < N; p += KC) {
+            int kc = (N - p < KC ? N - p : KC);
 
-            // pack B-panel
-            pack_blockB(&B[j * k + p], blockB_packed, nc, kc, k);
+            // pack B-panel (nc × kc) from B[j..j+nc-1][p..p+kc-1]
+            pack_blockB(&B[j * N + p], blockB_packed, nc, kc, N);
 
-            for (int i = 0; i < m; i += MC) {
-                int mc = min(MC, m - i);
+            for (int i = 0; i < N; i += MC) {
+                int mc = (N - i < MC ? N - i : MC);
 
-                // pack A-block
-                pack_blockA(&A[p * m + i], blockA_packed, mc, kc, m);
+                // pack A-block (mc × kc) from A[p..p+kc-1][i..i+mc-1]
+                pack_blockA(&A[p * N + i], blockA_packed, mc, kc, N);
 
-                #pragma omp parallel for collapse(2)
+                // now launch micro‑kernels over the mc×nc block
+                #pragma omp parallel for collapse(2) schedule(static)
                 for (int ir = 0; ir < mc; ir += MR) {
                     for (int jr = 0; jr < nc; jr += NR) {
-                        int mr = min(MR, mc - ir);
-                        int nr = min(NR, nc - jr);
+                        int mr = (mc - ir < MR ? mc - ir : MR);
+                        int nr = (nc - jr < NR ? nc - jr : NR);
 
                         kernel_24x6(
-                          &blockA_packed[ir * kc],
-                          &blockB_packed[jr * kc],
-                          &C[(j + jr)*m + (i + ir)],
-                          mr,
-                          nr,
-                          kc,
-                          m
+                          &blockA_packed[ir * kc],      // A micro‑panel
+                          &blockB_packed[jr * kc],      // B micro‑panel
+                          &C[(j + jr) * N + (i + ir)],   
+                          mr, nr, kc, N
                         );
                     }
                 }
@@ -111,3 +110,4 @@ void matmul(double* A, double* B, double* C, int m, int n, int k) {
         }
     }
 }
+

@@ -1,11 +1,9 @@
-// file: count_recursion_timed.c
-
 #include <stdio.h>
 #include <stdint.h>
 #include <omp.h>
 #include <stdlib.h>
 
-static const int BASE    = 2;    // same cutoff as your real code
+static const int BASE    = 128;    // same cutoff as your real code
 static const int SIZES[] = {64, 128, 256, 512, 1024, 2048, 4096, 8192};
 static const int NSIZES  = sizeof(SIZES) / sizeof(*SIZES);
 
@@ -27,29 +25,28 @@ void strassen_count(int n) {
     counter++;
     if (n <= BASE) return;
     int k = n / 2;
-    // 7 recursive subcalls
-    #pragma omp task shared(counter,max_stack_usage)
+    // #pragma omp task shared(counter,max_stack_usage)
         strassen_count(k);
-    #pragma omp task shared(counter,max_stack_usage)
+    // #pragma omp task shared(counter,max_stack_usage)
         strassen_count(k);
-    #pragma omp task shared(counter,max_stack_usage)
+    // #pragma omp task shared(counter,max_stack_usage)
         strassen_count(k);
-    #pragma omp task shared(counter,max_stack_usage)
+    // #pragma omp task shared(counter,max_stack_usage)
         strassen_count(k);
-    #pragma omp task shared(counter,max_stack_usage)
+    // #pragma omp task shared(counter,max_stack_usage)
         strassen_count(k);
-    #pragma omp task shared(counter,max_stack_usage)
+    // #pragma omp task shared(counter,max_stack_usage)
         strassen_count(k);
-    #pragma omp task shared(counter,max_stack_usage)
+    // #pragma omp task shared(counter,max_stack_usage)
         strassen_count(k);
 
-    #pragma omp taskwait
+    // #pragma omp taskwait
 }
 
 int main(void) {
     char base_marker;
     stack_base = &base_marker;
-    omp_set_num_threads(32);
+    // omp_set_num_threads(32);
 
 
     printf("    n    calls      time (s)      avg time/call (µs)        max_stack(bytes)\n");

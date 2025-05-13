@@ -4,8 +4,8 @@
 set -e
 
 # Compile the two counters
-gcc -O2 -fopenmp -fstack-usage -o strassen_recusion strassen_recusion.c
-gcc -O2 -fopenmp -fstack-usage -o strassen_memory   strassen_memory.c
+gcc -O3 -fopenmp -fstack-usage -o strassen_recusion strassen_recusion.c
+gcc -O3 -fopenmp -fstack-usage -o strassen_memory   strassen_memory.c
 
 # Run the recursion‐call counter
 echo "=== Strassen Recursive Call Counts ==="

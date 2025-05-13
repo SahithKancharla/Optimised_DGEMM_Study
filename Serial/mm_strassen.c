@@ -18,7 +18,7 @@ static void subtractMatrix(double* A, double* B, double* C, int n) {
 }
 
 double* strassenMultiply(double* A, double* B, int n) {
-    if (n <= 64) {
+    if (n <= 128) {
         double* C = initializeMatrix1D(n);
         for (int i = 0; i < n; i++)
             for (int j = 0; j < n; j++)

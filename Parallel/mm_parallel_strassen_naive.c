@@ -17,7 +17,7 @@ static void subtractMatrix_N(double* A, double* B, double* C, int n) {
         C[i] = A[i] - B[i];
 }
 
-double* strassenMultiply_N(double* A, double* B, int n, int cutoff) {
+double* strassenMultiply_P(double* A, double* B, int n, int cutoff) {
     // base case: 2×2 Strassen
     if (n == 2) {
         double* C = initializeMatrix1D_n(n);
@@ -65,28 +65,28 @@ double* strassenMultiply_N(double* A, double* B, int n, int cutoff) {
     {
         double* S = initializeMatrix1D_n(k);
         subtractMatrix_N(B12, B22, S, k);
-        P1 = strassenMultiply_N(A11, S, k, cutoff);
+        P1 = strassenMultiply_P(A11, S, k, cutoff);
         free(S);
     }
     #pragma omp task shared(P2) if (n > cutoff)
     {
         double* S = initializeMatrix1D_n(k);
         addMatrix_N(A11, A12, S, k);
-        P2 = strassenMultiply_N(S, B22, k, cutoff);
+        P2 = strassenMultiply_P(S, B22, k, cutoff);
         free(S);
     }
     #pragma omp task shared(P3) if (n > cutoff)
     {
         double* S = initializeMatrix1D_n(k);
         addMatrix_N(A21, A22, S, k);
-        P3 = strassenMultiply_N(S, B11, k, cutoff);
+        P3 = strassenMultiply_P(S, B11, k, cutoff);
         free(S);
     }
     #pragma omp task shared(P4) if (n > cutoff)
     {
         double* S = initializeMatrix1D_n(k);
         subtractMatrix_N(B21, B11, S, k);
-        P4 = strassenMultiply_N(A22, S, k, cutoff);
+        P4 = strassenMultiply_P(A22, S, k, cutoff);
         free(S);
     }
     #pragma omp task shared(P5) if (n > cutoff)
@@ -95,7 +95,7 @@ double* strassenMultiply_N(double* A, double* B, int n, int cutoff) {
         double* S2 = initializeMatrix1D_n(k);
         addMatrix_N(A11, A22, S1, k);
         addMatrix_N(B11, B22, S2, k);
-        P5 = strassenMultiply_N(S1, S2, k, cutoff);
+        P5 = strassenMultiply_P(S1, S2, k, cutoff);
         free(S1); free(S2);
     }
     #pragma omp task shared(P6) if (n > cutoff)
@@ -104,7 +104,7 @@ double* strassenMultiply_N(double* A, double* B, int n, int cutoff) {
         double* S2 = initializeMatrix1D_n(k);
         subtractMatrix_N(A12, A22, S1, k);
         addMatrix_N(B21, B22, S2, k);
-        P6 = strassenMultiply_N(S1, S2, k, cutoff);
+        P6 = strassenMultiply_P(S1, S2, k, cutoff);
         free(S1); free(S2);
     }
     #pragma omp task shared(P7) if (n > cutoff)
@@ -113,7 +113,7 @@ double* strassenMultiply_N(double* A, double* B, int n, int cutoff) {
         double* S2 = initializeMatrix1D_n(k);
         subtractMatrix_N(A11, A21, S1, k);
         addMatrix_N(B11, B12, S2, k);
-        P7 = strassenMultiply_N(S1, S2, k, cutoff);
+        P7 = strassenMultiply_P(S1, S2, k, cutoff);
         free(S1); free(S2);
     }
 
@@ -184,7 +184,7 @@ double* mm_parallel_strassen_naive(int nthreads, int rows, int cols_a, int cols_
     {
         #pragma omp single
         {
-            double* C_mat = strassenMultiply_N(A_mat, B_mat, size, 128);
+            double* C_mat = strassenMultiply_P(A_mat, B_mat, size, 128);
             // copy back into C
             for (int i = 0; i < rows; i++)
                 for (int j = 0; j < cols_b; j++)

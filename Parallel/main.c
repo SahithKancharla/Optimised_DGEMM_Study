@@ -6,7 +6,7 @@
 #include <sys/types.h>
 #include <unistd.h>
 
-#define RUNS 10
+#define RUNS 14
 #define DISCARD 2
 
 extern double* mm_parallel_blocked(int nthreads, int rows, int cols_a, int cols_b);
@@ -22,10 +22,36 @@ int compare(const void *a, const void *b) {
 }
 
 void prepare_output_dirs() {
-    system("rm -rf Values");
-    mkdir("Values", 0777);
-    mkdir("Results", 0777);
+    struct stat st = {0};
+
+    // Remove and recreate "Values"
+    if (stat("Values", &st) == 0) {
+        system("rm -rf Values");
+    }
+    if (mkdir("Values", 0777) != 0) {
+        perror("Failed to create Values directory");
+        exit(1);
+    }
+
+    // Remove and recreate "Results"
+    if (stat("Results", &st) == 0) {
+        system("rm -rf Results");
+    }
+    if (mkdir("Results", 0777) != 0) {
+        perror("Failed to create Results directory");
+        exit(1);
+    }
+
+    // Remove and recreate "Data"
+    if (stat("Data", &st) == 0) {
+        system("rm -rf Data");
+    }
+    if (mkdir("Data", 0777) != 0) {
+        perror("Failed to create Data directory");
+        exit(1);
+    }
 }
+
 
 void initialize_and_write_matrices(int rows, int cols_a, int cols_b) {
     double *a = (double *)malloc(rows * cols_a * sizeof(double));
