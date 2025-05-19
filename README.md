@@ -31,3 +31,5 @@ This repository contains implementations of serial, parallel, and AVX-512-enhanc
    chmod +x avx/run.sh Strassen_BreakDown/run.sh test/run.sh 
    ```
 
+You can download or view the PDF here:  
+[Download the PDF](./Advance_Parallel_Programming_Dense_Analysis.pdf)
