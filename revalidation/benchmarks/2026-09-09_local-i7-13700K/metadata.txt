@@ -1,0 +1,54 @@
+run_date: 2026-09-09 (same session as ../2026-09-09_glogin-e5-2630v3/, run second)
+repo_commit: 42386e26bf63032ea6a934d2b23cbf76421e4e6e (+ same uncommitted fixes as
+  the glogin run: avx/matmul.c packing fix, avx/strassen.c power-of-2 padding fix,
+  Parallel/mm_parallel_blocked.c and mm_parallel_blocked_unrolled.c
+  collapse(3)->collapse(2) race fix, avx/kernel_avx2.c, avx/strassen_avx2.c)
+host: local machine (user's own Windows box), via WSL2 Ubuntu -> Docker (gcc:13
+  image) -- NOT a VM or remote host; Docker on WSL2 runs containers directly on
+  the host CPU/kernel, so this is genuine local hardware execution, confirmed
+  `nproc` inside the container reports the same 24 logical cores as the host.
+cpu: 13th Gen Intel(R) Core(TM) i7-13700K -- HYBRID design: 8 P-cores (with
+  hyperthreading) + 8 E-cores = 24 logical threads total. This matters for
+  interpreting thread-scaling numbers: P-cores and E-cores have different
+  per-core throughput, so OpenMP static scheduling across a heterogeneous set
+  of cores can show less-than-ideal scaling purely from core heterogeneity,
+  independent of any algorithmic issue.
+isa_available: avx, avx2, fma -- NO avx512f (this CPU generation doesn't have
+  AVX-512 enabled; some 13th-gen dies have it fused off entirely)
+os: Linux 6.6.87.2-microsoft-standard-WSL2 (WSL2), containerized via Docker
+  gcc:13 (Debian-based)
+compiler: gcc 13 (Docker `gcc:13` image) -- NOTE: different from the paper's
+  gcc 11.5 and from the glogin run's gcc 11.5.0; a different compiler version
+  than both other data points in this repo.
+build_flags: -O3 -march=native -mavx2 -mfma -ffast-math -fopenmp
+driver: revalidate.c (same driver as the glogin run, with sizes/threads
+  extended to make use of this machine's larger core count and speed -- see
+  below. Diff the two revalidate.c copies if exact grid differences matter.)
+reps_per_datapoint: 3 (best-of-3 wall time) -- same caveat as before, this is
+  directional, not the paper's 14-run/trim-2/avg-10 methodology.
+sizes_tested: 64, 128, 256, 512, 1024, 2048 (added 2048 vs. the glogin run,
+  since this machine is fast enough to make it cheap)
+threads_tested: 1, 2, 4, 7, 8, 16 (extended to 16 per explicit request --
+  "use 16 cores or so" -- vs. glogin's cap of 8, since this box actually has
+  the cores to test the paper's ">7 threads" claims further out)
+excluded_datapoints: same policy as the glogin run -- naive (scalar) and pure/
+  no-cutoff strassen are skipped above N=512 (marked -1.000000), since both
+  are already known to blow up badly at scale and weren't worth the wall-clock
+  cost here either.
+
+CAVEATS (same as the glogin run, repeated because they're easy to miss if you
+only open this file):
+- AVX2 numbers use avx/kernel_avx2.c and avx/strassen_avx2.c, which are
+  correctness-verified ports but were NOT independently performance-tuned for
+  AVX2 the way the original kernel.c/strassen.c were tuned for AVX-512 on the
+  paper's Cascade Lake target. Don't read the AVX2 absolute numbers, or the
+  blocked-vs-Strassen-AVX2 comparison, as representative of the real AVX-512
+  build.
+- Matrix data uses the paper's own A[i][j]=i+j, B[i][j]=i*j pattern (timing
+  run, not a correctness run -- correctness was separately and exhaustively
+  verified with asymmetric data; see ../../correctness/).
+- This machine is NOT the paper's target (32-core Xeon Gold 5218, AVX-512).
+  It's faster per-core and has a very different cache hierarchy and a
+  heterogeneous P/E core layout, so absolute times and thread-scaling shapes
+  are expected to differ from the paper on general principle, independent of
+  any bug.

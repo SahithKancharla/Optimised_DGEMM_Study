@@ -1,0 +1,51 @@
+run_date: 2026-09-09
+repo_commit: 42386e26bf63032ea6a934d2b23cbf76421e4e6e + uncommitted fixes from this
+  session (see ../../correctness/2026-09-09_bug_evidence_and_fixes.md) + the
+  new opt-in call/allocation counters (harness/count_calls.h and the
+  COUNT_CALLS-guarded instrumentation added to every Strassen variant).
+host: glogin.cs.vt.edu (Xeon E5-2630 v3, 8 cores) -- the only machine
+  available with real hardware PMU access; WSL2 (this session's other test
+  machine) blocks all hardware perf events entirely, confirmed via
+  `perf stat -e cycles,instructions,...` returning "<not supported>" for
+  every event even with --privileged Docker.
+compiler: gcc 11.5.0 (matches the paper)
+build: harness/run_one_plain (no counters, used for time + perf-wrapped
+  counter runs) and harness/run_one_counted (built with -DCOUNT_CALLS, used
+  only to read off calls/bytes_allocated for Strassen variants -- confirmed
+  negligible timing overhead vs. run_one_plain, see
+  ../../correctness/2026-09-09_bug_evidence_and_fixes.md's build notes).
+driver: harness/harness_sweep.py -- for each (algo, N, T): one timing run,
+  two `perf stat` runs (event list split into two groups to reduce PMU
+  counter multiplexing -- Haswell has few general-purpose counters, so
+  cramming 11 events into one run degrades accuracy), and (Strassen only)
+  one counted run for calls/bytes. Output: harness_results.csv.
+events_collected: cycles, instructions, branches, branch-misses,
+  cache-references, cache-misses, L1-dcache-loads, L1-dcache-load-misses,
+  L1-dcache-stores, dTLB-loads, dTLB-load-misses.
+events_NOT_available on this CPU: LLC-loads, LLC-load-misses, LLC-stores,
+  LLC-store-misses, stalled-cycles-frontend/backend all report
+  "<not supported>" on this Haswell E5-2630 v3 (unlike the paper's Cascade
+  Lake Gold 5218, where the paper's own Table IX-XXVII used exactly these
+  LLC events successfully) -- cache-references/cache-misses (generic,
+  usually LLC-level on Intel) and L1-dcache-* were used as the closest
+  available substitute.
+sizes: 64, 128, 256, 512, 1024 (1024 skipped for naive and *_pure Strassen,
+  same exclusion policy as the earlier benchmark runs -- both are known to
+  blow up badly and weren't worth the added perf-run cost here)
+threads: 1 for non-parallel algorithms (naive, naive_unrolled, blocked,
+  blocked_unrolled, strassen_pure, strassen_hybrid, strassen_hybrid_unrolled
+  -- these don't actually parallelize, T is a no-op for them); 1, 4, 8 for
+  parallel_* and avx2_* algorithms.
+recursion depth: NOT tracked at runtime (no overhead added for it) -- for
+  Strassen it's fully determined analytically by depth = ceil(log2(N /
+  base_case_N)), so compute it from N and the known cutoff instead of
+  reading it from data.
+reps: 1 per (algo,N,T,event-group) -- this is exploratory root-cause
+  analysis, not a publication-grade statistical study; treat single-run
+  perf numbers as indicative, not precise (perf's own multiplexing-scaling
+  already introduces some estimation error, visible as the coverage %
+  column in raw perf output, which isn't saved to the CSV here).
+caveats: same hardware caveats as ../../benchmarks/2026-09-09_glogin-e5-2630v3/
+  apply (not the paper's Xeon Gold 5218 / AVX-512 / 32-core target; AVX2
+  kernels are correctness-verified ports, not independently performance-
+  tuned). See ../../FINDINGS.md for the synthesized analysis of this data.

@@ -5,6 +5,9 @@
 #include <immintrin.h>
 #include <x86intrin.h>
 #include <mm_malloc.h>
+#include "../harness/count_calls.h"
+
+COUNT_CALLS_DEFINE_ATOMIC(avx512_hybrid)
 
 #define CUTOFF 128
 #define MEMALIGN 64
@@ -87,6 +90,7 @@ static void matmul(double *A, double *B, double *C, int N) {
 // the rest is identical scratch‑copy Strassen…
 
 static inline double* aligned_alloc_mat(int n) {
+    COUNT_BYTES_ATOMIC(avx512_hybrid, (size_t)n * n * sizeof(double));
     double *p = _mm_malloc((size_t)n * n * sizeof(double), MEMALIGN);
     if (!p) { perror("alloc"); exit(1); }
     return p;
@@ -135,6 +139,7 @@ static void copy_block(const double *src, int N, int row0, int col0,
 static void strassen_rec(const double *A, const double *B,
                          double *C, int N)
 {
+    COUNT_CALL_ATOMIC(avx512_hybrid);
     if (N <= CUTOFF) {
         matmul((double*)A, (double*)B, C, N);
         return;
@@ -237,9 +242,50 @@ static void strassen_rec(const double *A, const double *B,
 void strassen(double *A, double *B, double *C, int N) {
     omp_set_nested(1);
     omp_set_max_active_levels(1);
+
+    // strassen_rec halves N at every recursion level (k = N/2) without any
+    // remainder handling; unless N is a power of two, that silently drops
+    // the last row/column of every quadrant partway down (e.g. N=517:
+    // 517/2 truncates to 258, discarding row/col 516). Pad up to the next
+    // power of two first, like the Serial/Parallel Strassen variants do.
+    int size = 1;
+    while (size < N) size <<= 1;
+    // matmul()'s register-blocked base case (above) assumes N is a multiple
+    // of 8 and unconditionally issues full 8-wide _mm512_load_pd/store_pd
+    // even on the last row/column, so it also needs N >= 8: without this,
+    // N in {0,1,2,4} (all powers of two < 8, e.g. size==N==4) would reach
+    // matmul() directly below with a buffer too small for its fixed-width
+    // vector ops -- a heap buffer over-read/over-write. N<=0 has the same
+    // problem (size floors at 1, still < 8).
+    if (size < 8) size = 8;
+
+    if (size == N) {
+        #pragma omp parallel
+        #pragma omp single nowait
+        strassen_rec(A, B, C, N);
+        return;
+    }
+
+    double *Ap = aligned_alloc_mat(size);
+    double *Bp = aligned_alloc_mat(size);
+    double *Cp = aligned_alloc_mat(size);
+    memset(Ap, 0, (size_t)size * size * sizeof(double));
+    memset(Bp, 0, (size_t)size * size * sizeof(double));
+
+    for (int i = 0; i < N; i++) {
+        memcpy(Ap + (size_t)i * size, A + (size_t)i * N, N * sizeof(double));
+        memcpy(Bp + (size_t)i * size, B + (size_t)i * N, N * sizeof(double));
+    }
+
     #pragma omp parallel
     #pragma omp single nowait
-    strassen_rec(A, B, C, N);
+    strassen_rec(Ap, Bp, Cp, size);
+
+    for (int i = 0; i < N; i++) {
+        memcpy(C + (size_t)i * N, Cp + (size_t)i * size, N * sizeof(double));
+    }
+
+    _mm_free(Ap); _mm_free(Bp); _mm_free(Cp);
 }
 
 // Don’t forget your main(): allocate A/B/C, init A/B, time strassen(), verify C, free.

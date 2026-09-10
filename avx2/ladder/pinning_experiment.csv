@@ -1,0 +1,9 @@
+﻿label,line
+unpinned_dynamic,ladder,full,1024,8,dynamic,4,5,0.001300,0.000836,0.016847,0.020569,104.404,0.000e+00
+unpinned_static,ladder,full,1024,8,static,0,5,0.001100,0.000600,0.007198,0.009850,218.021,0.000e+00
+P_cores_only_dynamic,ladder,full,1024,8,dynamic,4,5,0.001264,0.000595,0.004942,0.007614,282.033,0.000e+00
+P_cores_only_static,ladder,full,1024,8,static,0,5,0.001243,0.000622,0.005846,0.008553,251.085,0.000e+00
+E_cores_only_dynamic,ladder,full,1024,8,dynamic,4,5,0.001564,0.000760,0.012117,0.015699,136.789,0.000e+00
+E_cores_only_static,ladder,full,1024,8,static,0,5,0.001880,0.000886,0.012221,0.016148,132.983,0.000e+00
+mixed_PE_dynamic,ladder,full,1024,8,dynamic,4,5,0.001363,0.000978,0.011848,0.015076,142.446,0.000e+00
+mixed_PE_static,ladder,full,1024,8,static,0,5,0.001818,0.001058,0.012992,0.016494,130.194,0.000e+00

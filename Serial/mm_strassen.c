@@ -2,8 +2,12 @@
 #include <stdlib.h>
 #include <string.h>
 #include <omp.h>
+#include "../harness/count_calls.h"
+
+COUNT_CALLS_DEFINE(serial_hybrid)
 
 static double* initializeMatrix1D(int n) {
+    COUNT_BYTES(serial_hybrid, (size_t)n * n * sizeof(double));
     return (double*)calloc(n * n, sizeof(double));
 }
 
@@ -18,6 +22,7 @@ static void subtractMatrix(double* A, double* B, double* C, int n) {
 }
 
 double* strassenMultiply(double* A, double* B, int n) {
+    COUNT_CALL(serial_hybrid);
     if (n <= 128) {
         double* C = initializeMatrix1D(n);
         for (int i = 0; i < n; i++)

@@ -28,8 +28,13 @@ double* mm_parallel_blocked_unrolled(int nthreads, int NUM_ROWS_A, int NUM_COLS_
 
     double start_time = omp_get_wtime();
 
-    // Blocked matrix multiplication using 1D arrays
-    #pragma omp parallel for collapse(3) schedule(static)
+    // Blocked matrix multiplication using 1D arrays.
+    // collapse(2): only ii,jj (independent output blocks) are split across
+    // threads. kk (the reduction dimension) must stay inside a single
+    // thread's work, since every kk-block accumulates into the same
+    // c[i*NUM_COLS_B+j] cells -- collapsing kk in here too is a data race
+    // (unsynchronized += from multiple threads on the same cell).
+    #pragma omp parallel for collapse(2) schedule(static)
     for (int ii = 0; ii < NUM_ROWS_A; ii += BLOCK_SIZE) {
         for (int jj = 0; jj < NUM_COLS_B; jj += BLOCK_SIZE) {
             for (int kk = 0; kk < NUM_COLS_A; kk += BLOCK_SIZE) {

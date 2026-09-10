@@ -1,0 +1,55 @@
+run_date: 2026-09-09 (America/New_York, ~21:18-21:23)
+repo_commit: 42386e26bf63032ea6a934d2b23cbf76421e4e6e (+ uncommitted fixes from this session:
+  avx/matmul.c packing fix, avx/strassen.c power-of-2 padding fix,
+  Parallel/mm_parallel_blocked.c and mm_parallel_blocked_unrolled.c
+  collapse(3)->collapse(2) race fix, avx/kernel_avx2.c, avx/strassen_avx2.c added)
+host: glogin.cs.vt.edu (rlogin pool -- individual ssh connections land on
+  different physical boxes within the pool, e.g. kepler.rlogin / fermi.rlogin;
+  confirmed all pool members are identical hardware, see below)
+cpu: Intel Xeon E5-2630 v3 @ 2.40GHz (Haswell), 8 logical cores (no SMT observed)
+isa_available: avx, avx2, fma  -- NO avx512f (confirmed via /proc/cpuinfo flags)
+os: Linux 5.14.0-722.el9.x86_64 (RHEL9-based), shared/multi-user login node
+compiler: gcc 11.5.0 20240719 (Red Hat 11.5.0-15)  -- matches the paper's stated
+  gcc 11.5 exactly
+build_flags: -O3 -march=native -mavx2 -mfma -ffast-math -fopenmp
+driver: revalidate.c (ad hoc, not part of the paper's own automation scripts --
+  written to spot-check a reduced size/thread grid rather than the paper's full
+  sweep; see notes below)
+reps_per_datapoint: 3 (best-of-3 wall time), vs. the paper's 14-run/trim-2/avg-10
+  methodology -- these numbers are directional, not publication-grade statistics
+sizes_tested: 64, 128, 256, 512, 1024  (paper also tests 2048..16384; skipped here
+  to keep total run time short, per explicit request -- "no need to run the full
+  16 hour tests")
+threads_tested: 1, 2, 4, 7, 8  (paper tests up to 64; capped at 8 because that's
+  all the physical cores this node has -- so the ">7 threads" plateau claims can
+  only be partially checked here, not the full high-thread-count behavior)
+excluded_datapoints: naive (scalar, no cutoff) and strassen "pure"/no-cutoff
+  variants are skipped above N=512 in both serial and parallel sections (marked
+  -1.000000 in the CSVs/raw output) -- both are already known from the paper's
+  own data to blow up badly at scale (pure Strassen: 75s serial naive at 2048;
+  pure parallel Strassen: up to several seconds to tens of seconds even at 512),
+  and re-confirming that blowup at N=1024+ wasn't worth the wall-clock cost for
+  a "get a sense of it" pass.
+
+WHAT THIS RUN IS AND ISN'T:
+- IS: a real, executed, end-to-end sanity check that the (now-fixed) code
+  builds and runs correctly across Serial/Parallel/AVX2 code paths on real,
+  different hardware than the paper used, and a rough directional check of
+  whether the paper's qualitative performance claims (unrolling helps, blocking
+  helps, pure Strassen is bad under parallelism, hybrid Strassen wins at medium
+  sizes, etc.) reproduce.
+- IS NOT: a substitute for re-running the paper's actual benchmark suite on
+  the Xeon Gold 5218 (32-core, AVX-512) the paper was written against. No
+  AVX-512 hardware was available for this session (see conversation history),
+  so the "AVX2" numbers here use avx/kernel_avx2.c and avx/strassen_avx2.c,
+  which are correctness-verified ports but were NOT independently
+  performance-tuned for AVX2 the way the original kernel.c/strassen.c were
+  tuned for AVX-512 on Cascade Lake -- do not treat the AVX2 absolute
+  numbers, or the blocked-vs-Strassen-AVX2 comparison, as representative of
+  what the AVX-512 build would show. The correctness of the fixes is the
+  reliable takeaway; the exact performance crossover points are not.
+- Matrix data uses the paper's own A[i][j]=i+j, B[i][j]=i*j pattern (matching
+  what Serial/Parallel/main.c and avx/main.c generate), NOT the asymmetric
+  data used during correctness testing -- this run is about timing, not
+  correctness (correctness was separately and exhaustively verified; see
+  ../correctness/).

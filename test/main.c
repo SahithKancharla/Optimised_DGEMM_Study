@@ -50,6 +50,12 @@ void initialize_and_write_matrices(int rows, int cols_a, int cols_b) {
             b[i * cols_b + j] = i * j;
 
     mkdir("Data", 0777);
+    // mm_naive() and friends (Serial/Parallel/*.c) fopen("Values/time_*.txt",
+    // "a") unconditionally and never check the result before fprintf-ing to
+    // it -- if this directory doesn't exist that's a NULL-pointer
+    // dereference (SIGSEGV) on the very first call. Same for "Results".
+    mkdir("Values", 0777);
+    mkdir("Results", 0777);
     FILE *fa = fopen("Data/matrix_a.bin", "wb");
     FILE *fb = fopen("Data/matrix_b.bin", "wb");
     if (!fa || !fb) {
@@ -61,13 +67,6 @@ void initialize_and_write_matrices(int rows, int cols_a, int cols_b) {
     fwrite(b, sizeof(double), cols_a * cols_b, fb);
     fclose(fa); fclose(fb);
     free(a); free(b);
-}
-
-void transpose_square(double *dst, const double *src, int N) {
-    #pragma omp parallel for collapse(2)
-    for (int i = 0; i < N; ++i)
-        for (int j = 0; j < N; ++j)
-            dst[i * N + j] = src[j * N + i];
 }
 
 static int compare_mat(double *ref, double *test, int N) {
@@ -176,15 +175,8 @@ int main(int argc, char *argv[]) {
         }
 
         double *C_compare = C;
-        if (strcmp(tests[t].name, "avx_blocked") == 0) {
-            C_compare = _mm_malloc(N * N * sizeof(double), MEMALIGN);
-            if (!C_compare) {
-                fprintf(stderr, "Memory alloc failed for transpose buffer\n");
-                _mm_free(C);
-                continue;
-            }
-            transpose_square(C_compare, C, N);
-        }
+        /* matmul() (avx/matmul.c) now returns standard row-major C = A*B
+           directly, so no compensating transpose is needed here anymore. */
 
         int bad = compare_mat(C_ref, C_compare, N);
         if (bad < 0) {

@@ -2,8 +2,12 @@
 #include <stdlib.h>
 #include <string.h>
 #include <omp.h>
+#include "../harness/count_calls.h"
+
+COUNT_CALLS_DEFINE(serial_pure)
 
 static double* initializeMatrix1D_n(int n) {
+    COUNT_BYTES(serial_pure, (size_t)n * n * sizeof(double));
     return (double*)calloc(n * n, sizeof(double));
 }
 
@@ -18,6 +22,7 @@ static void subtractMatrix_N(double* A, double* B, double* C, int n) {
 }
 
 double* strassenMultiply_N(double* A, double* B, int n) {
+    COUNT_CALL(serial_pure);
     if (n == 2) {
         double* C = initializeMatrix1D_n(n);
         double a = A[0], b = A[1], c = A[2], d = A[3];
@@ -124,6 +129,10 @@ double* mm_strassen_naive(int nthreads, int rows, int cols_a, int cols_b) {
 
     int size = 1;
     while (size < rows || size < cols_a || size < cols_b) size <<= 1;
+    // strassenMultiply_N's only base case is n==2 (it always recurses with
+    // k = n/2 otherwise); size==1 would call it with n=1, and 1/2==0/2==0
+    // forever -- unbounded recursion / stack overflow. Floor at 2.
+    if (size < 2) size = 2;
 
     double* A_mat = initializeMatrix1D_n(size);
     double* B_mat = initializeMatrix1D_n(size);
