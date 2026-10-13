@@ -9,13 +9,13 @@ read-through:
 
 1. **Scalar stand-in kernels** — `kernel_24x6`/`strassen()` reimplemented with
    plain scalar loops but the *exact same packed-buffer contract*, so the
-   real, unmodified packing/blocking/combination logic from `avx/matmul.c`
-   and `avx/strassen.c` runs (and can be checked) on any CPU.
-2. **Real AVX2 ports** — `avx/kernel_avx2.c`, `avx/strassen_avx2.c`: genuine
+   real, unmodified packing/blocking/combination logic from `audited_submission/avx/matmul.c`
+   and `audited_submission/avx/strassen.c` runs (and can be checked) on any CPU.
+2. **Real AVX2 ports** — `audited_submission/avx/kernel_avx2.c`, `audited_submission/avx/strassen_avx2.c`: genuine
    256-bit `_mm256`/FMA3 intrinsics, same tile shapes, confirmed via
    `objdump` to emit real `vfmadd*pd` instructions (not scalar fallback).
 
-## Bug 1: `avx/matmul.c` computed `C = B·A`, not `C = A·B`
+## Bug 1: `audited_submission/avx/matmul.c` computed `C = B·A`, not `C = A·B`
 
 Asymmetric test matrices (`A[i][j] = i*10+j+1`, `B[i][j] = 2*i-j+100` — chosen
 specifically so `A ≠ Aᵀ`, `B ≠ Bᵀ`, `A·B ≠ B·A`, unlike the paper's own test
@@ -35,7 +35,7 @@ transposed), and `kernel_24x6`'s natural output orientation (MR axis fast,
 NR axis ld-strided) compounded it into a full operand swap once combined
 with the C-pointer arithmetic at the call site.
 
-The existing `test/main.c` "verification" only ever applied
+The existing `audited_submission/test/main.c` "verification" only ever applied
 `transpose_square()` to the `avx_blocked` result before comparing — which
 only cancels out because its test data is symmetric
 (`transpose(B·A) = Aᵀ·Bᵀ = A·B` when `A=Aᵀ, B=Bᵀ`). It was a false-positive
@@ -47,7 +47,7 @@ added one O(N²) transpose pass at the end of `matmul()` to correct for
 `kernel_24x6`'s fixed internal tile orientation (kept `kernel.c` itself
 completely untouched — zero risk to the AVX-512 kernel).
 
-Post-fix, `test/main.c`'s `transpose_square()` workaround was removed (it's
+Post-fix, `audited_submission/test/main.c`'s `transpose_square()` workaround was removed (it's
 no longer needed and would now double-transpose / re-break the result).
 
 **Verified**: 17 sizes N=1..517 (including non-multiples of the 24×6 tile),
@@ -86,7 +86,7 @@ sequential within a thread's block).
 adversarial) at N=1024, T=32 (4x oversubscribed on 8 cores) — 8/8 runs exact
 match, `maxdiff=0`.
 
-## Bug 3: `avx/strassen.c` silently drops data for non-power-of-2 N > 128
+## Bug 3: `audited_submission/avx/strassen.c` silently drops data for non-power-of-2 N > 128
 
 `strassen_rec` halves `N` every level (`k = N/2`, integer division) with no
 padding — unlike the Serial/Parallel Strassen variants, which all pad to the
@@ -99,7 +99,7 @@ avx_strassen : FAIL at [0,1]  ref=45929246.000000  got=45166336.000000
 ```
 
 **Fix**: pad `A`/`B` up to the next power of two before recursing (same
-pattern as `Serial/mm_strassen.c`), copy the result back out.
+pattern as `audited_submission/Serial/mm_strassen.c`), copy the result back out.
 
 **Verified**: N=1..517 including odd sizes, `maxdiff=0`.
 
@@ -111,10 +111,10 @@ than its vector width → out-of-bounds SIMD load, segfault. Confirmed via
 range (N≥64) and not a realistic use case for a "32-core AVX-512 kernel."
 Worth fixing before anyone calls `strassen()` on tiny matrices directly.
 
-## Bug 4: `test/run.sh` / `test/main.c` segfault on a clean checkout
+## Bug 4: `audited_submission/test/run.sh` / `audited_submission/test/main.c` segfault on a clean checkout
 
-`test/main.c` created `Data/` but never `Values/`/`Results/`; every
-`mm_*` function (`Serial/*.c`, `Parallel/*.c`) does
+`audited_submission/test/main.c` created `audited_submission/Data/` but never `Values/`/`Results/`; every
+`mm_*` function (`audited_submission/Serial/*.c`, `audited_submission/Parallel/*.c`) does
 `fopen("Values/time_*.txt", "a")` and unconditionally `fprintf`s to the
 result without checking for `NULL` — SIGSEGV on the very first call.
 
@@ -127,7 +127,7 @@ Thread 1 "test_scalar" received signal SIGSEGV, Segmentation fault.
 ```
 
 **Fix**: added `mkdir("Values", 0777); mkdir("Results", 0777);` next to the
-existing `mkdir("Data", 0777);` in `test/main.c`.
+existing `mkdir("Data", 0777);` in `audited_submission/test/main.c`.
 
 **Verified**: ran on a genuinely clean state (`rm -rf Values Results Data`)
 — no crash, all 13 variants PASS.

@@ -4,7 +4,7 @@ This file tracks verified findings from two complementary, concurrent
 workstreams on this repo: **(A)** building and optimizing a new AVX2
 multilevel DGEMM implementation and benchmarking it against production BLAS
 (OpenBLAS/BLIS/MKL), and **(B)** auditing the *original* AVX-512 codebase
-(`avx/`, `Parallel/`, `test/`) for correctness bugs and revalidating the
+(`audited_submission/avx/`, `audited_submission/Parallel/`, `audited_submission/test/`) for correctness bugs and revalidating the
 paper's own performance claims on non-target hardware, backed by hardware
 performance counters where available. Both feed the same paper revision.
 Everything below is either a direct measurement, a disassembly/`perf`/source
@@ -22,7 +22,7 @@ restatement.
   the paper's original Cascade Lake cluster; no AVX-512 anywhere; `perf`
   hardware counters unavailable under WSL2 entirely, available but
   LLC-event-limited on `glogin`.
-- **Part B** — new AVX2 DGEMM built from scratch (`avx2/`) and tuned
+- **Part B** — new AVX2 DGEMM built from scratch (`src/avx2/`) and tuned
   against OpenBLAS/BLIS/MKL: microkernel sweep, a disassembly-driven
   ablation series (operand-swap, unroll+prefetch, shape selection,
   hand-written assembly, vectorized packing) took it from ~76% to ~87-92%
@@ -33,7 +33,7 @@ restatement.
   environment-specific, not yet proven architectural. §B.13 adds a
   native-Windows P/E-core/SMT substitute-NUMA study.
 - **Part C** — four real correctness bugs found and fixed in the
-  *original* AVX-512 codebase (`avx/`, `Parallel/`, `test/`), each with
+  *original* AVX-512 codebase (`audited_submission/avx/`, `audited_submission/Parallel/`, `audited_submission/test/`), each with
   real execution evidence, not just reading.
 - **Part D** — the paper's own performance claims re-tested on two
   non-target machines: the parallel-Strassen-degrades finding reproduces
@@ -50,7 +50,7 @@ restatement.
   artifact. Headline result: once properly *repeated* (not single-run),
   the effect did not reproduce on native Windows, including in the
   heterogeneous P+E-core case theory favors it most.
-- **Part H** — a first Strassen rebuild (`strassen2/`, pooled workspace,
+- **Part H** — a first Strassen rebuild (`src/strassen2/`, pooled workspace,
   fused adds, 4-bare-view quadrant handling, thread-aware cutoff) against
   a near-peak (~427-467 GFLOP/s) baseline: crossover at N≈8192.
 - **Part I** — a first numerical-accuracy sweep against that rebuild: a
@@ -119,9 +119,9 @@ the prose itself).
   i7-13700K (8 P-cores + 8 E-cores, 24 logical processors, 16 physical
   cores), 64GB RAM.
 - **No AVX-512 hardware was reachable in either workstream.** Confirmed via
-  `/proc/cpuinfo` on the local machine: only `avx`, `avx2`, `fma` flags
+  `/proc/cpuinfo` on the local machine: only `audited_submission/avx`, `src/avx2`, `fma` flags
   present. Intel fuses off AVX-512 on Raptor Lake consumer parts once
-  E-cores are active. The existing `avx/` AVX-512 code cannot run natively
+  E-cores are active. The existing `audited_submission/avx/` AVX-512 code cannot run natively
   on this CPU; the AVX-512 code has been correctness-*reasoned*-about and
   compile-checked (`-march=skylake-avx512`) but never executed since the
   fixes in Part C went in (see Part F).
@@ -129,11 +129,11 @@ the prose itself).
   paper's dual-socket NUMA experiments are not reproducible on this hardware
   at all, not just a configuration issue.
 - **WSL2/Hyper-V cannot isolate P-core vs E-core identity.** A pure-register
-  AVX2 FMA microbenchmark (`topology/classify_cores.c`) pinned via `taskset`
+  AVX2 FMA microbenchmark (`src/topology/classify_cores.c`) pinned via `taskset`
   to each of the 24 logical CPUs inside WSL2 showed a **flat ~70-71 GFLOP/s
   everywhere** — no bimodal split, meaning Hyper-V's scheduler does not honor
   a stable guest-vCPU-to-physical-core mapping. The **same test run natively
-  on Windows** (via `SetThreadAffinityMask`, `topology/classify_cores_native.c`)
+  on Windows** (via `SetThreadAffinityMask`, `src/topology/classify_cores_native.c`)
   showed a clean split: **logical CPUs 0-15 ≈ 33-34 GFLOP/s (P-cores, HT
   pairs), logical CPUs 16-23 ≈ 17 GFLOP/s (E-cores, no HT, ~half throughput)**.
   Implication: any P-core/E-core or SMT-on/off substitute-NUMA experiment
@@ -159,7 +159,7 @@ facts are shared:
 
 - **Not the paper's original cluster.** It's a KVM-virtualized 8-vCPU slice
   (2 vSockets × 4 cores, no HT) of an Intel Xeon **E5-2630 v3 (Haswell-EP,
-  2015)** — predates AVX-512 entirely (`avx`/`avx2`/`fma` only, confirmed via
+  2015)** — predates AVX-512 entirely (`audited_submission/avx`/`src/avx2`/`fma` only, confirmed via
   `/proc/cpuinfo`).
 - No sudo, no job scheduler (no Slurm/PBS/LSF found). System-wide
   `libopenblas.so.0` and ATLAS already installed. **gcc 11.5.0 — matches the
@@ -183,7 +183,7 @@ facts are shared:
 # Part B — DGEMM Microkernel Optimization vs Production BLAS
 
 *(Workstream A: building/tuning a new AVX2 multilevel DGEMM from scratch,
-independent of the original `avx/` codebase, benchmarked against
+independent of the original `audited_submission/avx/` codebase, benchmarked against
 OpenBLAS/BLIS/MKL.)*
 
 ## B.1 Baseline setup (WSL2 Ubuntu 24.04)
@@ -198,7 +198,7 @@ OpenBLAS/BLIS/MKL.)*
 - Cache sizes (P-core, `cpu0`): L1d=48K, L1i=32K, L2=2048K (2MB), L3=30720K
   (30MB shared) — used as the starting point for blocking-parameter tuning.
 
-## B.2 Reference library comparison (`reference/`)
+## B.2 Reference library comparison (`src/reference/`)
 
 Curated excerpts (not full clones — full source kept locally outside the
 repo at `Research/reference-libs/`, gitignored) from OpenBLAS and BLIS, with
@@ -224,7 +224,7 @@ license + exact source commit for attribution. MKL has no public source.
   copy/beta routines, suggesting the packing step itself is a nontrivial
   share of any performance gap, not just the microkernel (see B.6).
 
-## B.3 AVX2 microkernel sweep (`avx2/sweep/`)
+## B.3 AVX2 microkernel sweep (`src/avx2/sweep/`)
 
 AVX2's 256-bit registers hold 4 doubles, so `MR` must be a multiple of 4 for
 a vector-per-row-group design (the design used before the operand swap in
@@ -241,7 +241,7 @@ including deliberately over-register-budget shapes to observe spilling.
 
 Diagnosed by disassembling our own compiled kernel and comparing
 instruction-for-instruction against OpenBLAS's real assembly
-(`reference/openblas/dgemm_kernel_4x8_haswell.S`):
+(`src/reference/openblas/dgemm_kernel_4x8_haswell.S`):
 
 1. **Wrong broadcast operand.** Original kernel broadcast B (8 separate
    loads) and vector-loaded A (1 load) = 9 loads for 8 FMAs. OpenBLAS
@@ -269,14 +269,14 @@ N=2048/16 threads before moving to the next:
 
 | File | Fix applied | Result (GFLOP/s) |
 |---|---|---|
-| `avx2/matmul_4x8.c` (v1) | original 4×8, broadcast-B | 298-317 (noisy) |
-| `avx2/matmul_v2_swap.c` | broadcast-A / vector-B swap | **regressed** to 240 with a naive stack-round-trip write-back; **334** once fixed to an in-register 4×4 transpose write-back, then **fixed again** to flat named accumulators instead of a 2D array (GCC was silently spilling accumulators to the stack every k-step for the `[4][2]` array shape — confirmed via `objdump` `vmovapd` to `(%rsp)` every iteration; a `[1][8]` array in v1 didn't trigger this) |
-| `avx2/matmul_v3_unroll_prefetch.c` | manual 2-way k-unroll + prefetch (PF_DIST=4) | 355 |
-| `avx2/matmul_v4_threading.c` | single `#pragma omp parallel` region (orphaned `omp for` worksharing) instead of 3 reopened regions | **no measurable change** (353 vs 355) — honest negative result; libgomp's thread-pool re-entry cost was cheap enough at this scale that fork/join wasn't the bottleneck it looked like on paper |
+| `src/avx2/matmul_4x8.c` (v1) | original 4×8, broadcast-B | 298-317 (noisy) |
+| `src/avx2/matmul_v2_swap.c` | broadcast-A / vector-B swap | **regressed** to 240 with a naive stack-round-trip write-back; **334** once fixed to an in-register 4×4 transpose write-back, then **fixed again** to flat named accumulators instead of a 2D array (GCC was silently spilling accumulators to the stack every k-step for the `[4][2]` array shape — confirmed via `objdump` `vmovapd` to `(%rsp)` every iteration; a `[1][8]` array in v1 didn't trigger this) |
+| `src/avx2/matmul_v3_unroll_prefetch.c` | manual 2-way k-unroll + prefetch (PF_DIST=4) | 355 |
+| `src/avx2/matmul_v4_threading.c` | single `#pragma omp parallel` region (orphaned `omp for` worksharing) instead of 3 reopened regions | **no measurable change** (353 vs 355) — honest negative result; libgomp's thread-pool re-entry cost was cheap enough at this scale that fork/join wasn't the bottleneck it looked like on paper |
 | — | retuned blocking for the new kernel (KC=512→ MC_TARGET 256→128) | 366 |
-| `avx2/matmul_v5_unroll4.c` | 4-way k-unroll (tried) | **regressed** to 306 — over-unrolling hurt, abandoned |
-| `avx2/matmul_v6_mr6.c` | MR=6/NR=8 shape (matches BLIS; MR no longer constrained to a multiple of 4 once broadcast, not vectorized) | 373 (retuned blocking KC=1024/MC=576/NC=1024) |
-| `avx2/matmul_v7_4x12.c` | MR=4/NR=12 shape (best theoretical load:FMA ratio) | **worse**, 329-346 — abandoned |
+| `src/avx2/matmul_v5_unroll4.c` | 4-way k-unroll (tried) | **regressed** to 306 — over-unrolling hurt, abandoned |
+| `src/avx2/matmul_v6_mr6.c` | MR=6/NR=8 shape (matches BLIS; MR no longer constrained to a multiple of 4 once broadcast, not vectorized) | 373 (retuned blocking KC=1024/MC=576/NC=1024) |
+| `src/avx2/matmul_v7_4x12.c` | MR=4/NR=12 shape (best theoretical load:FMA ratio) | **worse**, 329-346 — abandoned |
 
 Also tried and found **not helpful, within noise**: `OMP_PROC_BIND=true`/
 `OMP_PLACES=cores` (367 vs 373); PF_DIST sweep 2/6/8/12 (all 351-373, no
@@ -291,7 +291,7 @@ even more at that thread count, so it doesn't close the relative gap
 either. All "final" numbers in B.6/B.7 are 10-run averages, not single
 samples.
 
-## B.5 Hand-written assembly (`avx2/asm_kernel/`) — new, separate method
+## B.5 Hand-written assembly (`src/avx2/asm_kernel/`) — new, separate method
 
 - `kernel_6x8.S`: hand-scheduled AVX2 assembly, MR=6/NR=8, manual register
   allocation (12 accumulators + broadcast/vector scratch), 2-way software
@@ -311,7 +311,7 @@ samples.
   intrinsics here** — the microkernel-level instruction scheduling/register
   allocation was not, in fact, the dominant remaining gap.
 
-## B.6 Roofline check (`roofline/stream_triad.c`)
+## B.6 Roofline check (`src/roofline/stream_triad.c`)
 
 - Measured DRAM bandwidth: **~77-85 GB/s** (8 threads slightly beat 16 —
   consistent with a dual-channel memory system saturating before all cores
@@ -323,7 +323,7 @@ samples.
   producing a big win (the bottleneck isn't instruction scheduling *or*
   memory bandwidth) and (b) packing overhead being the next real candidate.
 
-### Vectorized packing (`avx2/asm_kernel/matmul_asm_v2_vecpack.c`)
+### Vectorized packing (`src/avx2/asm_kernel/matmul_asm_v2_vecpack.c`)
 
 - `pack_panelA`: contiguous source → straight AVX2 load/store (YMM for 4
   of MR=6, XMM for the remaining 2) instead of 6 scalar loads.
@@ -498,7 +498,7 @@ Intel's own oneDNN source):
   result; C is written back only once per micro-tile call (not once per
   k-step like A/B), so there's little latency to hide there regardless.
 - **BLIS's actual shipped analytical blocking values tested directly on
-  our kernel** (KC=256, MC=72, NC=4080, from `reference/blis/`, rather
+  our kernel** (KC=256, MC=72, NC=4080, from `src/reference/blis/`, rather
   than re-deriving the formula ourselves): **416.5 GFLOP/s avg — clearly
   worse** than our empirically-tuned KC=1024/MC=576/NC=1024 (506.8).
   Confirms blocking parameters are kernel-implementation-specific (BLIS's
@@ -519,7 +519,7 @@ microkernel/blocking micro-tuning at this point — the highest-value
 remaining work is the bare-metal confirmation of B.8, not more parameter
 search.
 
-## B.12 A portable/generalizable harness, grounded in the autotuning literature (`avx2/portable/`)
+## B.12 A portable/generalizable harness, grounded in the autotuning literature (`src/avx2/portable/`)
 
 Everything through B.11 was tuned specifically for the dev machine: KC/MC/NC
 were hardcoded from an empirical sweep done there, and B.8's scheduling fix
@@ -541,8 +541,8 @@ review before redesigning (not just re-guessing):
   imbalanced/heterogeneous execution, with no tunable chunk-size parameter
   to re-guess per machine, unlike a hand-picked `dynamic,N`.
 
-Built `avx2/portable/` accordingly, with `avx2/asm_kernel/` and every
-`avx2/matmul_v*.c` kept completely unchanged as the machine-specific
+Built `src/avx2/portable/` accordingly, with `src/avx2/asm_kernel/` and every
+`src/avx2/matmul_v*.c` kept completely unchanged as the machine-specific
 baseline for comparison:
 
 - `hw_detect.c/.h`: portable (Linux `/sys`) detection of L1d/L2/L3 sizes,
@@ -644,7 +644,7 @@ item, updated below.
 This machine has no real NUMA (single socket, Part A), so per the plan this
 substitutes a heterogeneous-core scaling study using the P/E-core split.
 Must run natively (WSL2 can't pin to a specific physical core, Part A) --
-`topology/peak_scaling_native.c`, a multi-threaded version of the
+`src/topology/peak_scaling_native.c`, a multi-threaded version of the
 register-only FMA microbenchmark, one thread per requested logical CPU,
 pinned via `SetThreadAffinityMask`, no memory traffic (isolates compute
 throughput specifically).
@@ -714,17 +714,17 @@ confirmation.
 
 # Part C — Correctness Audit of the Original AVX-512 Implementation
 
-*(Workstream B: auditing `avx/`, `Parallel/`, and `test/` — the paper's
-own codebase — against `Advance_Parallel_Programming_Dense_Analysis.pdf`.
+*(Workstream B: auditing `audited_submission/avx/`, `audited_submission/Parallel/`, and `audited_submission/test/` — the paper's
+own codebase — against `audited_submission/Advance_Parallel_Programming_Dense_Analysis.pdf`.
 Full evidence — command output, backtraces, before/after — in
 `revalidation/correctness/2026-09-09_bug_evidence_and_fixes.md`.)*
 
 | # | Bug | File(s) | Root cause | Fix |
 |---|---|---|---|---|
-| 1 | `matmul()` computed `C = B·A`, not `A·B` | `avx/matmul.c` | Packing routines read A/B with contraction and output-row/col roles swapped; the existing `test/main.c` check only passed because its own test matrices are symmetric (a false-positive test) | Rewrote `pack_panelA`/`pack_panelB`/`pack_blockA`/`pack_blockB` with explicit row-major offsets; added a single O(N²) transpose pass at the end of `matmul()` to correct for `kernel_24x6`'s fixed tile orientation |
-| 2 | Data race in the blocked parallel kernel | `Parallel/mm_parallel_blocked.c`, `mm_parallel_blocked_unrolled.c` | `collapse(3)` parallelized over `ii,jj,kk` — including the reduction dimension — with unsynchronized `+=`. Only "worked" because GCC's static scheduling happened to keep the racy iterations temporally non-overlapping | `collapse(3)` → `collapse(2)`; verified correct even under adversarial `schedule(dynamic,1)` |
-| 3 | Silent data loss for non-power-of-2 N > 128 | `avx/strassen.c` | `strassen_rec` halves N with no remainder handling, unlike the Serial/Parallel Strassen variants which all pad first | Pad to next power of two before recursing |
-| 4 | Segfault on a clean checkout | `test/main.c`, `test/run.sh` | Created `Data/` but not `Values/`/`Results/`; every `mm_*` function `fprintf`s to an unchecked `fopen()` result | Added the missing `mkdir()` calls |
+| 1 | `matmul()` computed `C = B·A`, not `A·B` | `audited_submission/avx/matmul.c` | Packing routines read A/B with contraction and output-row/col roles swapped; the existing `audited_submission/test/main.c` check only passed because its own test matrices are symmetric (a false-positive test) | Rewrote `pack_panelA`/`pack_panelB`/`pack_blockA`/`pack_blockB` with explicit row-major offsets; added a single O(N²) transpose pass at the end of `matmul()` to correct for `kernel_24x6`'s fixed tile orientation |
+| 2 | Data race in the blocked parallel kernel | `audited_submission/Parallel/mm_parallel_blocked.c`, `mm_parallel_blocked_unrolled.c` | `collapse(3)` parallelized over `ii,jj,kk` — including the reduction dimension — with unsynchronized `+=`. Only "worked" because GCC's static scheduling happened to keep the racy iterations temporally non-overlapping | `collapse(3)` → `collapse(2)`; verified correct even under adversarial `schedule(dynamic,1)` |
+| 3 | Silent data loss for non-power-of-2 N > 128 | `audited_submission/avx/strassen.c` | `strassen_rec` halves N with no remainder handling, unlike the Serial/Parallel Strassen variants which all pad first | Pad to next power of two before recursing |
+| 4 | Segfault on a clean checkout | `audited_submission/test/main.c`, `audited_submission/test/run.sh` | Created `audited_submission/Data/` but not `Values/`/`Results/`; every `mm_*` function `fprintf`s to an unchecked `fopen()` result | Added the missing `mkdir()` calls |
 
 **Known, not fixed**: `strassen()` segfaults if called directly on N ∈ {1,2}
 (AVX2) or {1,2,4} (AVX-512) — the no-padding fast path feeds a
@@ -737,10 +737,10 @@ contract, no intrinsics) let the actual `matmul.c`/`strassen.c` logic run on
 any CPU during the audit itself — a temporary verification aid, not kept in
 the repo afterward (its command output is preserved as evidence in
 `revalidation/correctness/2026-09-09_bug_evidence_and_fixes.md`). What *is*
-permanent is a real AVX2 port (`avx/kernel_avx2.c`, `avx/strassen_avx2.c` —
+permanent is a real AVX2 port (`audited_submission/avx/kernel_avx2.c`, `audited_submission/avx/strassen_avx2.c` —
 confirmed via `objdump` to emit genuine `vfmadd*pd`), which gives real
 vectorized correctness data without needing AVX-512 hardware and can be
-re-run any time via `avx/run_local_avx2.sh`.
+re-run any time via `audited_submission/avx/run_local_avx2.sh`.
 
 ## C.6 Second-pass whole-repo bug sweep (`/code-review max --fix`)
 
@@ -751,8 +751,8 @@ below). Verified: normal-case runs unaffected, previously-unsafe inputs
 now fail cleanly instead of corrupting memory or hanging.
 
 **Fixed:**
-- **Heap overflow for N≤0 and small powers-of-two** in `avx/strassen.c`
-  and `avx/strassen_avx2.c` — the next-power-of-two padding added for
+- **Heap overflow for N≤0 and small powers-of-two** in `audited_submission/avx/strassen.c`
+  and `audited_submission/avx/strassen_avx2.c` — the next-power-of-two padding added for
   Part C's bug #3 didn't floor at the base-case vector width, so
   `strassen(A,B,C,0)` or `strassen(A,B,C,4)` (AVX-512) / `N=2` (AVX2)
   reached the vectorized base case on a too-small buffer. **This was a
@@ -760,11 +760,11 @@ now fail cleanly instead of corrupting memory or hanging.
   more thorough pass — worth noting as a lesson about re-reviewing fixes,
   not just new code. Fixed by flooring the padded size at the base-case
   width; verified across N = -1..1024.
-- **Infinite recursion at n=1** in `Parallel/mm_parallel_strassen_naive.c`
-  and `Serial/mm_strassen_naive.c` — the padding left `size=1` reachable,
+- **Infinite recursion at n=1** in `audited_submission/Parallel/mm_parallel_strassen_naive.c`
+  and `audited_submission/Serial/mm_strassen_naive.c` — the padding left `size=1` reachable,
   whose only base case is `n==2`, so it recursed on `k=n/2=0` forever
   (stack overflow). Floored the padded size at 2.
-- **Unchecked Win32 calls in `topology/peak_scaling_native.c` and
+- **Unchecked Win32 calls in `src/topology/peak_scaling_native.c` and
   `classify_cores_native.c`**: `WaitForMultipleObjects` uncapped past its
   hard 64-handle limit (silent torn results above that), a bit-shift
   overflow for cpu index ≥64 (UB, wraps to the wrong core), and
@@ -773,12 +773,12 @@ now fail cleanly instead of corrupting memory or hanging.
   input fails loudly (exit 1, clear message) instead of silently
   mismeasuring — verified directly (`peak_scaling_native.exe 99` now
   reports the error and exits 1 rather than printing a bogus number).
-- **Serial O(N²) transpose bottleneck** in `avx/matmul.c` — the pass added
+- **Serial O(N²) transpose bottleneck** in `audited_submission/avx/matmul.c` — the pass added
   to correct `kernel_24x6`'s output orientation (Part C bug #1) had no
   `#pragma omp parallel for`, unlike every other loop in that function;
   could rival the parallel compute phase's own time at realistic
   thread-counts. Parallelized (safe: disjoint per-row work).
-- **Missing `(size_t)` cast** in one index expression in `avx/matmul.c`
+- **Missing `(size_t)` cast** in one index expression in `audited_submission/avx/matmul.c`
   (32-bit multiply overflow risk for N > ~46,340) — added, matching every
   other index expression in the function.
 - **`test_local.c` alignment mismatch**: its `C` buffer was plain-`malloc`'d
@@ -799,18 +799,18 @@ now fail cleanly instead of corrupting memory or hanging.
   variants were ever linked into one binary — not triggered by any build
   script actually in this repo (they're designed as drop-in alternatives,
   one linked at a time); renaming now would fight that intentional design.
-- `avx/strassen.c` and `strassen_avx2.c`'s ~40-line orchestration wrapper
+- `audited_submission/avx/strassen.c` and `strassen_avx2.c`'s ~40-line orchestration wrapper
   is duplicated verbatim — a real dedup opportunity, but risky to refactor
   blind without a build/link path to verify it against in this environment.
 - `omp_set_nested`/`omp_set_max_active_levels` global-state mutation in
-  `avx/strassen.c` vs. `omp_set_nested(0)` in the `Parallel/` Strassen
+  `audited_submission/avx/strassen.c` vs. `omp_set_nested(0)` in the `audited_submission/Parallel/` Strassen
   files — ambiguous whether this is a bug or deliberate; left alone rather
   than guess at intended semantics.
 
 Full linking of the AVX2 harness could not be completed in this
 environment (MinGW is missing a pthread import lib for `-fopenmp`) — an
 environment gap, not a defect in the fixes; every touched file compiles
-cleanly to `.o`, and the two `topology/` tools were linked and run
+cleanly to `.o`, and the two `src/topology/` tools were linked and run
 directly to confirm runtime behavior.
 
 ---
@@ -867,8 +867,8 @@ scalar (non-SIMD) version of that same claim doesn't hold on two unrelated
 non-target machines. Worth making that scoping explicit in the writeup.
 
 *(Note the relationship to Part B: this AVX2 blocked/Strassen comparison is
-from the original `avx/` codebase's ports, not independently
-performance-tuned the way the new `avx2/matmul_v*` series in Part B was —
+from the original `audited_submission/avx/` codebase's ports, not independently
+performance-tuned the way the new `src/avx2/matmul_v*` series in Part B was —
 they are different code answering different questions, kept separate
 deliberately.)*
 
@@ -957,7 +957,7 @@ compute per unit of that overhead to amortize it against.
 | strassen_hybrid (not unrolled) | 1024 | 0.98 | **63.5%** | more |
 | strassen_hybrid_unrolled | 1024 | 1.69 | **25.0%** | fewer |
 
-The un-unrolled hybrid's base case (`Serial/mm_strassen.c`, N≤128) is a
+The un-unrolled hybrid's base case (`audited_submission/Serial/mm_strassen.c`, N≤128) is a
 plain `i,j,k` triple loop — the *same* cache-hostile access pattern as
 scalar naive, and its L1-miss rate (62-64%) matches naive's almost exactly.
 The "unrolled" variant's base case (`mm_strassen_unrolled.c`) isn't just
@@ -1006,7 +1006,7 @@ that's exactly the kind of effect NUMA-aware placement (which the paper's
 own Future Work section already flags) would address. *(Cross-reference:
 Part B.6 reached the same qualitative conclusion — compute/bandwidth
 crossover matters — independently, via a STREAM benchmark on the new
-`avx2/` codebase rather than perf counters on the old one.)*
+`src/avx2/` codebase rather than perf counters on the old one.)*
 
 ---
 
@@ -1058,7 +1058,7 @@ crossover matters — independently, via a STREAM benchmark on the new
   usable as a DGEMM reference; MKL remains the right Intel comparison.
 - Full benchmark sweep across sizes (256-8192+) and thread configs
   (P-only/E-only/all-physical/SMT, native Windows) — **further along**:
-  Part G's `avx2/ladder/` P/E/mixed pinning experiment (repeated, N=1024
+  Part G's `src/avx2/ladder/` P/E/mixed pinning experiment (repeated, N=1024
   only) plus §B.13's native P-only/E-only/SMT-on-off/all-cores sweep
   (single-run, needs repetition per G.4) together cover the core-placement
   axis reasonably well now; still missing the full 256-8192+ size range
@@ -1098,7 +1098,7 @@ crossover matters — independently, via a STREAM benchmark on the new
 **Workstream B (correctness + revalidation of the original codebase):**
 - **Real AVX-512 execution.** No AVX-512 hardware was reachable this
   session. The AVX-512 code compiles clean against every fix (`kernel.c`
-  and `avx/strassen.c` both compile-checked with `-march=skylake-avx512`),
+  and `audited_submission/avx/strassen.c` both compile-checked with `-march=skylake-avx512`),
   and the packing fix is provably width-independent (same fix, same
   packed-buffer contract, verified with real vector execution on AVX2) —
   but nobody has run the actual AVX-512 binary since the fix went in. Do
@@ -1125,7 +1125,7 @@ crossover matters — independently, via a STREAM benchmark on the new
 
 ---
 
-# Part G — Is the Scheduling Win Real, or Virtualization Compensation? (`avx2/ladder/`)
+# Part G — Is the Scheduling Win Real, or Virtualization Compensation? (`src/avx2/ladder/`)
 
 *(Direct response to the standing Part F question and to an external
 research-plan review requesting a systematic driving-factors study: a
@@ -1157,9 +1157,9 @@ existing LLC-event gap, unchanged); the Strassen rebuild, numerical-
 accuracy study, and irregular-shape sweep were not started. These remain
 open — see the updated Part F.
 
-## G.1 A portable, phase-timed ladder harness (`avx2/ladder/`)
+## G.1 A portable, phase-timed ladder harness (`src/avx2/ladder/`)
 
-New, independent of the `avx2/matmul_v*`/`asm_kernel` series: a single
+New, independent of the `src/avx2/matmul_v*`/`asm_kernel` series: a single
 C source (`matmul_ladder.c`, MR=4×NR=8, broadcast-A/vector-B, flat
 accumulators — the already-validated "swap" convention from §B.4, chosen
 over the asm kernel's MR=6 shape specifically so the *same source* compiles
@@ -1215,7 +1215,7 @@ schedule ∈ {static, dynamic(chunk=4), guided}, on:
 - **`glogin.cs.vt.edu`** (KVM-virtualized, not Hyper-V — Workstream B's
   machine throughout Parts C-E)
 
-Raw data: `avx2/ladder/sweep_native_windows.csv`, `sweep_wsl2.csv`,
+Raw data: `src/avx2/ladder/sweep_native_windows.csv`, `sweep_wsl2.csv`,
 `sweep_glogin.csv` (single run per config each — see the caveat below
 before reading too much into any single cell).
 
@@ -1264,10 +1264,10 @@ this session (`SetThreadAffinityMask`; Linux affinity was not implemented
 in this pass — see Part F), this is the one environment where the actual
 "is it scheduling policy or is it core heterogeneity" question could be
 asked cleanly, using the P-core/E-core logical-CPU classification already
-established in Part A (`topology/classify_cores_native.c`: logical 0-15 =
+established in Part A (`src/topology/classify_cores_native.c`: logical 0-15 =
 P-cores/HT pairs, 16-23 = E-cores).
 
-At N=1024, T=8, first pass (single run each, `avx2/ladder/pinning_experiment.csv`):
+At N=1024, T=8, first pass (single run each, `src/avx2/ladder/pinning_experiment.csv`):
 
 | Placement | schedule | GFLOP/s |
 |---|---|---|
@@ -1351,29 +1351,29 @@ reasoning from first principles alone.
 
 ---
 
-# Part H — Strassen Rebuild (`strassen2/`)
+# Part H — Strassen Rebuild (`src/strassen2/`)
 
 The reviewer's ask was a genuine rebuild — pooled workspace, fused adds,
 1-/2-level, packing integration, thread-aware cutoff, optimized-vs-
 optimized comparison — distinct from Part C's correctness *fixes* to the
-existing `avx/strassen.c`, which remains a separate, untouched piece of
+existing `audited_submission/avx/strassen.c`, which remains a separate, untouched piece of
 work.
 
 ## H.1 Design
 
-- **`strassen2/dgemm_base.c`**: the tuned hand-asm/transpose-packed kernel
-  (same as `avx2/asm_kernel/matmul_asm_v3_transpack.c`) extracted into a
+- **`src/strassen2/dgemm_base.c`**: the tuned hand-asm/transpose-packed kernel
+  (same as `src/avx2/asm_kernel/matmul_asm_v3_transpack.c`) extracted into a
   reusable `dgemm_base(A,ldA,B,ldB,C,ldC,n)` library call with
   *independent* leading dimensions — this is what lets Strassen operate on
   quadrant VIEWS of the original matrices without copying them.
-- **Fused adds** (`strassen2/strassen_ops.c`): only the 10 genuinely
+- **Fused adds** (`src/strassen2/strassen_ops.c`): only the 10 genuinely
   combined operands the classic 7-multiplication formulation needs
   (A11+A22, B11+B22, A21+A22, B12-B22, B21-B11, A11+A12, A21-A11, B11+B12,
   A12-A22, B21+B22) are ever materialized. The 4 quadrants used *bare*
   (A11 in M3, A22 in M4, B11 in M2, B22 in M5) are passed straight to
   `dgemm_base` as strided views — never copied at all, which the original
-  `avx/matmul.c`-based Strassen didn't do (it copied all 8 quadrants).
-- **Pooled workspace** (`strassen2/strassen.c`): one batch allocation per
+  `audited_submission/avx/matmul.c`-based Strassen didn't do (it copied all 8 quadrants).
+- **Pooled workspace** (`src/strassen2/strassen.c`): one batch allocation per
   recursion level (17 buffers — 10 sums + 7 products — via one `bench_alloc`
   and pointer offsets), not 17 separate mallocs and nowhere near the
   millions of tiny allocations the original implementation produces at
@@ -1400,14 +1400,14 @@ the allocation code. Fixed by dropping the cache entirely: fresh local
 every calling context, and negligible overhead since Strassen calls this
 O(7) or O(49) times per level, not millions.
 
-Verified correct (`strassen2/test_strassen.c`) at n=64..1024 for both
+Verified correct (`src/strassen2/test_strassen.c`) at n=64..1024 for both
 variants, at both 8 threads (task-split path) and 16 threads (sequential
 path) — all pass at ~1e-15/1e-10 relative error, matching every other
 correct measurement in this document.
 
 ## H.3 Optimized-vs-optimized crossover (effective GFLOP/s = 2N³/time, per reviewer's request)
 
-`strassen2/bench_strassen.c` reports Strassen's throughput using the same
+`src/strassen2/bench_strassen.c` reports Strassen's throughput using the same
 formula as classical GEMM (not Strassen's true lower FLOP count) so it's
 directly comparable — deliberately labeled "effective" to avoid the
 same headline-number problem as the original naive-speedup framing.
@@ -1441,12 +1441,12 @@ GFLOP/s values.
 
 ---
 
-# Part I — Numerical Accuracy (`accuracy/`)
+# Part I — Numerical Accuracy (`src/accuracy/`)
 
 Completely absent before this — the single most-cited gap in the reviewer
 feedback. Built against the rebuilt Strassen (Part H) and `dgemm_base`,
 across three input distributions chosen to stress cancellation
-differently (`accuracy/distributions.c`): uniform (baseline), wide dynamic
+differently (`src/accuracy/distributions.c`): uniform (baseline), wide dynamic
 range (row-scaled across ~12 orders of magnitude — an ill-conditioned
 case), and clustered-near-1.0 (designed to stress cancellation in
 Strassen's recursive sums specifically).
@@ -1489,7 +1489,7 @@ didn't produce the expected effect, rather than silently dropped.
 
 ---
 
-# Part J — Closing Out the Remaining Review Points (`avx2/ladder/`)
+# Part J — Closing Out the Remaining Review Points (`src/avx2/ladder/`)
 
 *(Independent work, done in parallel with Parts H-I above without
 knowledge of them until this write-up — different design choices on both
@@ -1557,7 +1557,7 @@ run almost entirely through this write-back share (see below).
 One-parameter-at-a-time sweep (KC, then MC, then NC) at N=1024, T=8,
 static, paired with `perf stat` (cache-references/misses, L1-dcache,
 dTLB — same event set as Part E, same PMU limits apply). Full data:
-`avx2/ladder/blocking_sweep_results.csv`.
+`src/avx2/ladder/blocking_sweep_results.csv`.
 
 | KC | GFLOP/s | kernel_write_s | dTLB load misses |
 |---|---|---|---|
@@ -1692,7 +1692,7 @@ considering how often production workloads land off-boundary).
 
 ## J.7 An independent Strassen rebuild — cross-validated against Part H, with a real, explained discrepancy
 
-Built independently (`avx2/ladder/strassen_rebuild.c`, `strassen_main.c`),
+Built independently (`src/avx2/ladder/strassen_rebuild.c`, `strassen_main.c`),
 without reading Part H first. Different design choices, useful precisely
 *because* they differ:
 
@@ -1770,7 +1770,7 @@ through as a net win.
 
 ## J.8 An independent, broader accuracy sweep — cross-validated against Part I
 
-Built independently (`avx2/ladder/accuracy_test.c`): 5 distributions
+Built independently (`src/avx2/ladder/accuracy_test.c`): 5 distributions
 (uniform, gaussian, wide_range, ill_cond, cancel) × 4 methods (plain
 DGEMM, Strassen depth 1/2/3) + MKL (built against the real
 `/opt/intel/oneapi/mkl/2022.1.0` found in J.4), vs. an independently
@@ -1832,71 +1832,87 @@ shape, not precise.
 
 # Part K — Repo Map / Where Things Live
 
-```
-Workstream A (new AVX2 DGEMM vs. production BLAS):
-  setup/wsl_env_setup.sh              -- WSL2 toolchain + OpenBLAS/BLIS/MKL install
-  bench/, baselines/                  -- shared harness + OpenBLAS/BLIS/MKL/naive drivers
-  avx2/matmul_4x8.c ... matmul_v7_*.c -- C-intrinsics ablation series (v1-v7)
-  avx2/sweep/                         -- 9-shape microkernel sweep + generator
-  avx2/asm_kernel/                    -- hand-written assembly method: kernel_6x8.S,
-                                          matmul_asm.c (v1, scalar packing),
-                                          matmul_asm_v2_vecpack.c (v2, gather-based B pack),
-                                          matmul_asm_v3_transpack.c (v3, transpose-based B pack),
-                                          matmul_asm_v4_dynsched.c (v4, + dynamic scheduling --
-                                          current best, see B.8/B.9),
-                                          kernel_6x8_v2_cprefetch.S + matmul_asm_v5_cprefetch.c
-                                          (v5, + C-tile prefetch -- no gain, see B.11)
-  reference/                          -- curated OpenBLAS/BLIS excerpts + comparison notes
-                                          (Research/reference-libs/ also has full local clones of
-                                          OpenBLAS, BLIS, and oneDNN, gitignored, for source
-                                          inspection -- see B.2, B.10, B.11)
-  avx2/portable/                      -- portable/generalizable harness (see B.12): hw_detect.c/.h,
-                                          blocking_model.c/.h, matmul_portable.c (guided schedule),
-                                          matmul_portable_staticctrl.c (ablation control),
-                                          kernel_6x8.S (copy of asm_kernel's, unchanged).
-                                          Also deployed and tested on glogin.cs.vt.edu (~/portable_test
-                                          there, plus ~/openblas_src for the rebuilt-with-threading
-                                          OpenBLAS comparison) -- not just this dev machine.
-  topology/                           -- P-core/E-core classifier (WSL2 vs. native Windows),
-                                          peak_scaling_native.c (multi-thread pinned FMA
-                                          benchmark, see B.13)
-  roofline/stream_triad.c             -- STREAM-style bandwidth benchmark
-  strassen2/                          -- rebuilt Strassen (see Part H): dgemm_base.c/.h (tuned
-                                          kernel as a reusable ld-generalized library call),
-                                          strassen_ops.c/.h (fused add/sub/accumulate on strided
-                                          views), strassen.c/.h (strassen_1level/2level, pooled
-                                          workspace, thread-aware task/sequential cutoff),
-                                          test_strassen.c (correctness), bench_strassen.c
-                                          (effective-GFLOP/s crossover benchmark)
-  accuracy/                           -- numerical accuracy experiments (see Part I):
-                                          distributions.c/.h (uniform, wide-dynamic-range,
-                                          clustered-cancellation), bench_accuracy.c
-  avx2/ladder/                         -- Parts G & J: portable (MSVC+gcc) phase-timed harness --
-                                          matmul_ladder.c (v1, stages A/C-G), timer.h,
-                                          sweep.sh/.ps1, sweep_native_windows.csv / sweep_wsl2.csv
-                                          / sweep_glogin.csv, pinning_experiment.csv (Part G's
-                                          P/E-core repeated-measurement experiment; deployed on
-                                          native Windows, WSL2, and glogin.cs.vt.edu),
-                                          matmul_ladder2.c (Part J: runtime-configurable KC/MC/NC,
-                                          rectangular M/K/N, finer alloc/pack/kernel_compute/
-                                          kernel_write phase split, optional huge-page hint),
-                                          blocking_sweep.sh/.csv (J.3), strassen_rebuild.c +
-                                          strassen_main.c (J.7: independent pooled-arena Strassen
-                                          rebuild, depth-parameterized, cost-modeled),
-                                          accuracy_test.c (J.8, extended in Part M: 5-distribution x
-                                          depth 1-3 x {plain, classic Strassen, Dumas et al. 2024
-                                          alternate-basis} + MKL accuracy sweep), matmul_ladder_noinline.c
-                                          + dis_gcc/clang/icx.txt + gcc_loop.s/clang_loop.s (J.4:
-                                          compiler comparison + llvm-mca), compiler_comparison_raw.txt,
-                                          dumas_strassen_rebuild.c + dumas_main.c (Part M: Dumas/
-                                          Pernet/Sedoglavic 2024 alternate-basis Strassen, same
-                                          arena/task/phase-timing design as strassen_rebuild.c).
+As of the 2026-10 repo reorganization, every path below is physically
+split into `audited_submission/` (Generation 1 -- the original paper
+and benchmark suite being audited, untouched in design, bug-fixed in
+place) and `src/` (Generation 2 -- everything built new for this
+project's own audit/research). See the top-level `README.md`,
+`audited_submission/README.md`, and `src/README.md` for the
+reasoning; this map just gives exact paths.
 
-Workstream B (correctness audit + revalidation of the original codebase):
-  avx/kernel_avx2.c, strassen_avx2.c, run_local_avx2.sh, test_local.c  -- real,
-    permanent AVX2 build for correctness-testing without AVX-512 hardware
-  harness/count_calls.h, run_one.c, harness_sweep.py                   -- the
-    instrumentation and sweep driver used for Part E
+```
+Workstream A (new AVX2 DGEMM vs. production BLAS) -- all under src/:
+  setup/wsl_env_setup.sh                  -- WSL2 toolchain + OpenBLAS/BLIS/MKL install
+                                              (repo-root setup/, not src/ -- environment
+                                              bring-up, not implementation)
+  src/bench/, src/baselines/              -- shared harness + OpenBLAS/BLIS/MKL/naive drivers
+  src/avx2/matmul_4x8.c ... matmul_v7_*.c -- C-intrinsics ablation series (v1-v7)
+  src/avx2/sweep/                         -- 9-shape microkernel sweep + generator
+  src/avx2/asm_kernel/                    -- hand-written assembly method: kernel_6x8.S,
+                                              matmul_asm.c (v1, scalar packing),
+                                              matmul_asm_v2_vecpack.c (v2, gather-based B pack),
+                                              matmul_asm_v3_transpack.c (v3, transpose-based B pack),
+                                              matmul_asm_v4_dynsched.c (v4, + dynamic scheduling --
+                                              current best, see B.8/B.9),
+                                              kernel_6x8_v2_cprefetch.S + matmul_asm_v5_cprefetch.c
+                                              (v5, + C-tile prefetch -- no gain, see B.11)
+  src/reference/                          -- curated OpenBLAS/BLIS excerpts + comparison notes
+                                              (Research/reference-libs/ also has full local clones of
+                                              OpenBLAS, BLIS, and oneDNN, gitignored, for source
+                                              inspection -- see B.2, B.10, B.11)
+  src/avx2/portable/                      -- portable/generalizable harness (see B.12): hw_detect.c/.h,
+                                              blocking_model.c/.h, matmul_portable.c (guided schedule),
+                                              matmul_portable_staticctrl.c (ablation control),
+                                              kernel_6x8.S (copy of asm_kernel's, unchanged).
+                                              Also deployed and tested on glogin.cs.vt.edu (~/portable_test
+                                              there, plus ~/openblas_src for the rebuilt-with-threading
+                                              OpenBLAS comparison) -- not just this dev machine.
+  src/topology/                           -- P-core/E-core classifier (WSL2 vs. native Windows),
+                                              peak_scaling_native.c (multi-thread pinned FMA
+                                              benchmark, see B.13)
+  src/roofline/stream_triad.c             -- STREAM-style bandwidth benchmark
+  src/strassen2/                          -- rebuilt Strassen (see Part H): dgemm_base.c/.h (tuned
+                                              kernel as a reusable ld-generalized library call),
+                                              strassen_ops.c/.h (fused add/sub/accumulate on strided
+                                              views), strassen.c/.h (strassen_1level/2level, pooled
+                                              workspace, thread-aware task/sequential cutoff),
+                                              test_strassen.c (correctness), bench_strassen.c
+                                              (effective-GFLOP/s crossover benchmark)
+  src/accuracy/                           -- numerical accuracy experiments (see Part I):
+                                              distributions.c/.h (uniform, wide-dynamic-range,
+                                              clustered-cancellation), bench_accuracy.c
+  src/avx2/ladder/                         -- Parts G & J: portable (MSVC+gcc) phase-timed harness --
+                                              matmul_ladder.c (v1, stages A/C-G), timer.h,
+                                              sweep.sh/.ps1, sweep_native_windows.csv / sweep_wsl2.csv
+                                              / sweep_glogin.csv, pinning_experiment.csv (Part G's
+                                              P/E-core repeated-measurement experiment; deployed on
+                                              native Windows, WSL2, and glogin.cs.vt.edu),
+                                              matmul_ladder2.c (Part J: runtime-configurable KC/MC/NC,
+                                              rectangular M/K/N, finer alloc/pack/kernel_compute/
+                                              kernel_write phase split, optional huge-page hint),
+                                              blocking_sweep.sh/.csv (J.3), strassen_rebuild.c +
+                                              strassen_main.c (J.7: independent pooled-arena Strassen
+                                              rebuild, depth-parameterized, cost-modeled),
+                                              accuracy_test.c (J.8, extended in Part M: 5-distribution x
+                                              depth 1-3 x {plain, classic Strassen, Dumas et al. 2024
+                                              alternate-basis} + MKL accuracy sweep), matmul_ladder_noinline.c
+                                              + dis_gcc/clang/icx.txt + gcc_loop.s/clang_loop.s (J.4:
+                                              compiler comparison + llvm-mca), compiler_comparison_raw.txt,
+                                              dumas_strassen_rebuild.c + dumas_main.c (Part M: Dumas/
+                                              Pernet/Sedoglavic 2024 alternate-basis Strassen, same
+                                              arena/task/phase-timing design as strassen_rebuild.c).
+
+Workstream B (correctness audit + revalidation of the original codebase)
+-- audited code under audited_submission/, Workstream B's own new
+tooling under src/:
+  audited_submission/avx/kernel_avx2.c, strassen_avx2.c,
+    run_local_avx2.sh, test_local.c    -- real, permanent AVX2 build for
+    correctness-testing without AVX-512 hardware (new tooling, but kept
+    alongside the avx/ code it tests rather than under src/, since it's
+    a drop-in test harness FOR that code, not a separate research line)
+  src/harness/count_calls.h, run_one.c, harness_sweep.py  -- the
+    instrumentation and sweep driver used for Part E (included from
+    audited_submission/ files via ../../src/harness/..., see src/README.md)
   revalidation/correctness/   -- bug evidence, exact fixes, final pass/fail sweep
   revalidation/benchmarks/    -- wall-clock revalidation runs (2 machines)
   revalidation/harness/       -- hardware-counter root-cause data (Part E)
@@ -1906,8 +1922,8 @@ Workstream B (correctness audit + revalidation of the original codebase):
 
 Paper (Part L's publication-strategy framing, turned into an actual draft):
   paper/main.tex, paper/references.bib, paper/README.md  -- Overleaf-ready
-    LaTeX outline of the eventual paper, structured around Part L.3's three
-    headline contributions (Part C's correctness audit, Part G's
+    LaTeX paper, structured around Part L.3's three headline
+    contributions (Part C's correctness audit, Part G's
     measurement-bias case study, Part M's Dumas-2024 accuracy/performance
     study), with everything else as supporting/appendix material
 ```
@@ -1941,7 +1957,7 @@ hierarchy, the packed-panel microkernel, all of it traces back here. Van
 Zee & van de Geijn's [BLIS framework](https://www.cs.utexas.edu/~flame/pubs/BLISTOMSrev2.pdf)
 (TOMS 2016, SIAM SIAG/SC Best Paper 2020) generalized Goto's approach into
 a portable framework where only a tiny microkernel needs re-tuning per
-architecture — this is the design pattern Workstream A's `avx2/portable/`
+architecture — this is the design pattern Workstream A's `src/avx2/portable/`
 (hw_detect + blocking_model + swappable microkernel) is independently
 reinventing at smaller scale. Neither paper is about Strassen or
 measurement methodology; they're the ceiling this project's plain-DGEMM
@@ -2107,7 +2123,7 @@ A-K (not what's aspirational):
    prose paper lands.** Code/data citations compound on their own and are
    frequently cited by people who never cite the paper's prose at all —
    this is the direct, documented mechanism behind the reproducibility-
-   citation premium in L.1.4. `revalidation/`, `avx2/ladder/`, and the CSV
+   citation premium in L.1.4. `revalidation/`, `src/avx2/ladder/`, and the CSV
    data already in this repo are most of the way there; what's missing is
    a single top-level README describing how to re-run everything end to
    end (the RCR track's exact requirement) and a license file.
@@ -2260,7 +2276,7 @@ exact accuracy and phase-timing harness Parts I/J.7/J.8 already built,
 so the only thing that changes between "classic Strassen" and "this
 2024 variant" is the 7-multiplication formula itself — not the leaf
 kernel, not the packing, not the workspace strategy, not the
-parallelism. Code in `avx2/ladder/dumas_strassen_rebuild.c` +
+parallelism. Code in `src/avx2/ladder/dumas_strassen_rebuild.c` +
 `dumas_main.c` + the extended `accuracy_test.c`; evidence, scripts, and
 raw CSVs in `revalidation/dumas2024/`.
 

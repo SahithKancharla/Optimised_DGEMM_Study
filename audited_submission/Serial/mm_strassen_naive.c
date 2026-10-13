@@ -2,40 +2,52 @@
 #include <stdlib.h>
 #include <string.h>
 #include <omp.h>
-#include "../harness/count_calls.h"
+#include "../../src/harness/count_calls.h"
 
-COUNT_CALLS_DEFINE(serial_hybrid)
+COUNT_CALLS_DEFINE(serial_pure)
 
-static double* initializeMatrix1D(int n) {
-    COUNT_BYTES(serial_hybrid, (size_t)n * n * sizeof(double));
+static double* initializeMatrix1D_n(int n) {
+    COUNT_BYTES(serial_pure, (size_t)n * n * sizeof(double));
     return (double*)calloc(n * n, sizeof(double));
 }
 
-static void addMatrix(double* A, double* B, double* C, int n) {
+static void addMatrix_N(double* A, double* B, double* C, int n) {
     for (int i = 0; i < n * n; i++)
         C[i] = A[i] + B[i];
 }
 
-static void subtractMatrix(double* A, double* B, double* C, int n) {
+static void subtractMatrix_N(double* A, double* B, double* C, int n) {
     for (int i = 0; i < n * n; i++)
         C[i] = A[i] - B[i];
 }
 
-double* strassenMultiply(double* A, double* B, int n) {
-    COUNT_CALL(serial_hybrid);
-    if (n <= 128) {
-        double* C = initializeMatrix1D(n);
-        for (int i = 0; i < n; i++)
-            for (int j = 0; j < n; j++)
-                for (int k = 0; k < n; k++)
-                    C[i * n + j] += A[i * n + k] * B[k * n + j];
+double* strassenMultiply_N(double* A, double* B, int n) {
+    COUNT_CALL(serial_pure);
+    if (n == 2) {
+        double* C = initializeMatrix1D_n(n);
+        double a = A[0], b = A[1], c = A[2], d = A[3];
+        double e = B[0], f = B[1], g = B[2], h = B[3];
+
+        double p1 = a * (f - h);
+        double p2 = (a + b) * h;
+        double p3 = (c + d) * e;
+        double p4 = d * (g - e);
+        double p5 = (a + d) * (e + h);
+        double p6 = (b - d) * (g + h);
+        double p7 = (a - c) * (e + f);
+
+        C[0] = p5 + p4 - p2 + p6;
+        C[1] = p1 + p2;
+        C[2] = p3 + p4;
+        C[3] = p5 + p1 - p3 - p7;
+
         return C;
     }
 
     int k = n / 2;
     int size = k * k;
-    double *A11 = initializeMatrix1D(k), *A12 = initializeMatrix1D(k), *A21 = initializeMatrix1D(k), *A22 = initializeMatrix1D(k);
-    double *B11 = initializeMatrix1D(k), *B12 = initializeMatrix1D(k), *B21 = initializeMatrix1D(k), *B22 = initializeMatrix1D(k);
+    double *A11 = initializeMatrix1D_n(k), *A12 = initializeMatrix1D_n(k), *A21 = initializeMatrix1D_n(k), *A22 = initializeMatrix1D_n(k);
+    double *B11 = initializeMatrix1D_n(k), *B12 = initializeMatrix1D_n(k), *B21 = initializeMatrix1D_n(k), *B22 = initializeMatrix1D_n(k);
 
     for (int i = 0; i < k; i++) {
         for (int j = 0; j < k; j++) {
@@ -50,26 +62,26 @@ double* strassenMultiply(double* A, double* B, int n) {
         }
     }
 
-    double *S1 = initializeMatrix1D(k), *S2 = initializeMatrix1D(k);
-    subtractMatrix(B12, B22, S1, k);
-    double* P1 = strassenMultiply(A11, S1, k);
-    addMatrix(A11, A12, S1, k);
-    double* P2 = strassenMultiply(S1, B22, k);
-    addMatrix(A21, A22, S1, k);
-    double* P3 = strassenMultiply(S1, B11, k);
-    subtractMatrix(B21, B11, S1, k);
-    double* P4 = strassenMultiply(A22, S1, k);
-    addMatrix(A11, A22, S1, k);
-    addMatrix(B11, B22, S2, k);
-    double* P5 = strassenMultiply(S1, S2, k);
-    subtractMatrix(A12, A22, S1, k);
-    addMatrix(B21, B22, S2, k);
-    double* P6 = strassenMultiply(S1, S2, k);
-    subtractMatrix(A11, A21, S1, k);
-    addMatrix(B11, B12, S2, k);
-    double* P7 = strassenMultiply(S1, S2, k);
+    double *S1 = initializeMatrix1D_n(k), *S2 = initializeMatrix1D_n(k);
+    subtractMatrix_N(B12, B22, S1, k);
+    double* P1 = strassenMultiply_N(A11, S1, k);
+    addMatrix_N(A11, A12, S1, k);
+    double* P2 = strassenMultiply_N(S1, B22, k);
+    addMatrix_N(A21, A22, S1, k);
+    double* P3 = strassenMultiply_N(S1, B11, k);
+    subtractMatrix_N(B21, B11, S1, k);
+    double* P4 = strassenMultiply_N(A22, S1, k);
+    addMatrix_N(A11, A22, S1, k);
+    addMatrix_N(B11, B22, S2, k);
+    double* P5 = strassenMultiply_N(S1, S2, k);
+    subtractMatrix_N(A12, A22, S1, k);
+    addMatrix_N(B21, B22, S2, k);
+    double* P6 = strassenMultiply_N(S1, S2, k);
+    subtractMatrix_N(A11, A21, S1, k);
+    addMatrix_N(B11, B12, S2, k);
+    double* P7 = strassenMultiply_N(S1, S2, k);
 
-    double *C11 = initializeMatrix1D(k), *C12 = initializeMatrix1D(k), *C21 = initializeMatrix1D(k), *C22 = initializeMatrix1D(k);
+    double *C11 = initializeMatrix1D_n(k), *C12 = initializeMatrix1D_n(k), *C21 = initializeMatrix1D_n(k), *C22 = initializeMatrix1D_n(k);
     for (int i = 0; i < size; i++) {
         C11[i] = P5[i] + P4[i] - P2[i] + P6[i];
         C12[i] = P1[i] + P2[i];
@@ -77,7 +89,7 @@ double* strassenMultiply(double* A, double* B, int n) {
         C22[i] = P5[i] + P1[i] - P3[i] - P7[i];
     }
 
-    double* C = initializeMatrix1D(n);
+    double* C = initializeMatrix1D_n(n);
     for (int i = 0; i < k; i++) {
         for (int j = 0; j < k; j++) {
             C[i * n + j] = C11[i * k + j];
@@ -97,7 +109,7 @@ double* strassenMultiply(double* A, double* B, int n) {
     return C;
 }
 
-double* mm_strassen(int nthreads, int rows, int cols_a, int cols_b) {
+double* mm_strassen_naive(int nthreads, int rows, int cols_a, int cols_b) {
     omp_set_num_threads(nthreads);
 
     double *A = (double *)malloc(rows * cols_a * sizeof(double));
@@ -117,9 +129,13 @@ double* mm_strassen(int nthreads, int rows, int cols_a, int cols_b) {
 
     int size = 1;
     while (size < rows || size < cols_a || size < cols_b) size <<= 1;
+    // strassenMultiply_N's only base case is n==2 (it always recurses with
+    // k = n/2 otherwise); size==1 would call it with n=1, and 1/2==0/2==0
+    // forever -- unbounded recursion / stack overflow. Floor at 2.
+    if (size < 2) size = 2;
 
-    double* A_mat = initializeMatrix1D(size);
-    double* B_mat = initializeMatrix1D(size);
+    double* A_mat = initializeMatrix1D_n(size);
+    double* B_mat = initializeMatrix1D_n(size);
 
     for (int i = 0; i < rows; i++)
         for (int j = 0; j < cols_a; j++)
@@ -130,14 +146,14 @@ double* mm_strassen(int nthreads, int rows, int cols_a, int cols_b) {
             B_mat[i * size + j] = B[i * cols_b + j];
 
     double start_time = omp_get_wtime();
-    double* C_mat = strassenMultiply(A_mat, B_mat, size);
+    double* C_mat = strassenMultiply_N(A_mat, B_mat, size);
     double elapsed_time = omp_get_wtime() - start_time;
 
     for (int i = 0; i < rows; i++)
         for (int j = 0; j < cols_b; j++)
             C[i * cols_b + j] = C_mat[i * size + j];
 
-    FILE *ftime = fopen("Values/time_strassen.txt", "a");
+    FILE *ftime = fopen("Values/time_strassen_naive.txt", "a");
     fprintf(ftime, "%f\n", elapsed_time);
     fclose(ftime);
 

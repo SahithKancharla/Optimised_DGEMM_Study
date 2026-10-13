@@ -91,6 +91,12 @@ static void leaf_gemm(const double *A, const double *B, double *C, int n,
 }
 
 static int g_cutoff, g_max_depth, g_KC, g_MC, g_NC;
+/* Thread-aware task policy (extends strassen2/strassen.c's
+   TASK_SPLIT_THREAD_THRESHOLD with a leaf-size guard, measured: a
+   256-leaf regresses without tasks, a 512-leaf improves -- see git log). */
+#define STRASSEN_TASK_THREAD_THRESHOLD 8
+#define STRASSEN_MIN_LEAF_FOR_FULL_THREADS 512
+static int g_use_tasks;
 static size_t workspace_doubles_needed(int N, int cutoff, int max_depth);
 
 static void strassen_rec(const double *A, const double *B, double *C, int N,
@@ -149,19 +155,19 @@ static void strassen_rec(const double *A, const double *B, double *C, int N,
        via max_active_levels so we don't explode thread creation, same
        principle as the audited fix in Part C's mm_parallel_strassen_naive.c) */
     double ttask0 = ladder_now();
-    #pragma omp task shared(P1) if (N > g_cutoff*4)
+    #pragma omp task shared(P1) if (g_use_tasks && N > g_cutoff*4)
     { arena_t sub = { sub_base[0], 0, child_ws }; strassen_rec(A11, S1, P1, k, depth+1, &sub, st); }
-    #pragma omp task shared(P2) if (N > g_cutoff*4)
+    #pragma omp task shared(P2) if (g_use_tasks && N > g_cutoff*4)
     { arena_t sub = { sub_base[1], 0, child_ws }; strassen_rec(S2, B22, P2, k, depth+1, &sub, st); }
-    #pragma omp task shared(P3) if (N > g_cutoff*4)
+    #pragma omp task shared(P3) if (g_use_tasks && N > g_cutoff*4)
     { arena_t sub = { sub_base[2], 0, child_ws }; strassen_rec(S3, B11, P3, k, depth+1, &sub, st); }
-    #pragma omp task shared(P4) if (N > g_cutoff*4)
+    #pragma omp task shared(P4) if (g_use_tasks && N > g_cutoff*4)
     { arena_t sub = { sub_base[3], 0, child_ws }; strassen_rec(A22, S4, P4, k, depth+1, &sub, st); }
-    #pragma omp task shared(P5) if (N > g_cutoff*4)
+    #pragma omp task shared(P5) if (g_use_tasks && N > g_cutoff*4)
     { arena_t sub = { sub_base[4], 0, child_ws }; strassen_rec(S5, S6, P5, k, depth+1, &sub, st); }
-    #pragma omp task shared(P6) if (N > g_cutoff*4)
+    #pragma omp task shared(P6) if (g_use_tasks && N > g_cutoff*4)
     { arena_t sub = { sub_base[5], 0, child_ws }; strassen_rec(S7, S8, P6, k, depth+1, &sub, st); }
-    #pragma omp task shared(P7) if (N > g_cutoff*4)
+    #pragma omp task shared(P7) if (g_use_tasks && N > g_cutoff*4)
     { arena_t sub = { sub_base[6], 0, child_ws }; strassen_rec(S9, S10, P7, k, depth+1, &sub, st); }
     #pragma omp taskwait
     #pragma omp atomic
@@ -202,6 +208,8 @@ double* strassen_rebuild(const double *A, const double *B, int N, int cutoff, in
                           int KC, int MC, int NC, int nthreads, strassen_times_t *st) {
     memset(st, 0, sizeof(*st));
     g_cutoff = cutoff; g_max_depth = max_depth; g_KC = KC; g_MC = MC; g_NC = NC;
+    g_use_tasks = (nthreads <= STRASSEN_TASK_THREAD_THRESHOLD) ||
+                  (cutoff < STRASSEN_MIN_LEAF_FOR_FULL_THREADS);
 
     size_t arena_size = workspace_doubles_needed(N, cutoff, max_depth) + 1024;
     double *arena_base = aligned_alloc_d(arena_size);
@@ -210,11 +218,15 @@ double* strassen_rebuild(const double *A, const double *B, int N, int cutoff, in
     double *C = aligned_alloc_d((size_t)N*N);
 
     omp_set_num_threads(nthreads);
-    omp_set_max_active_levels(1);
     double t0 = ladder_now();
-    #pragma omp parallel
-    #pragma omp single nowait
-    strassen_rec(A, B, C, N, 0, &arena, st);
+    if (g_use_tasks) {
+        omp_set_max_active_levels(1);
+        #pragma omp parallel
+        #pragma omp single nowait
+        strassen_rec(A, B, C, N, 0, &arena, st);
+    } else {
+        strassen_rec(A, B, C, N, 0, &arena, st);
+    }
     st->total_s = ladder_now() - t0;
 
     aligned_free_d(arena_base);

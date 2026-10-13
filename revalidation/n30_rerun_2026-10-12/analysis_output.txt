@@ -1,0 +1,18 @@
+unpinned_static: n=30 mean=250.68 sd=30.55 min=192.45 max=304.07
+unpinned_dynamic: n=30 mean=264.28 sd=25.32 min=221.47 max=314.29
+mixed_PE_static: n=30 mean=148.16 sd=1.62 min=145.39 max=151.49
+mixed_PE_dynamic: n=30 mean=148.10 sd=1.49 min=145.52 max=150.61
+
+=== Bootstrap 95% CI for the mean (10,000 resamples) ===
+unpinned_static: mean=250.68  95% CI [240.08, 261.82]
+unpinned_dynamic: mean=264.28  95% CI [255.34, 273.30]
+mixed_PE_static: mean=148.16  95% CI [147.59, 148.74]
+mixed_PE_dynamic: mean=148.10  95% CI [147.59, 148.62]
+
+=== Games-Howell pairwise test (k=4 groups, Welch df, studentized range) ===
+unpinned_static      vs unpinned_dynamic    : diff=  -13.61  q=  2.656  df=  56.1  p=2.49e-01  ns
+unpinned_static      vs mixed_PE_static     : diff=  102.52  q= 25.958  df=  29.2  p=9.33e-15  ***
+unpinned_static      vs mixed_PE_dynamic    : diff=  102.57  q= 25.978  df=  29.1  p=7.77e-16  ***
+unpinned_dynamic     vs mixed_PE_static     : diff=  116.12  q= 35.447  df=  29.2  p=0.00e+00  ***
+unpinned_dynamic     vs mixed_PE_dynamic    : diff=  116.18  q= 35.475  df=  29.2  p=3.44e-15  ***
+mixed_PE_static      vs mixed_PE_dynamic    : diff=    0.05  q=  0.193  df=  57.6  p=9.99e-01  ns

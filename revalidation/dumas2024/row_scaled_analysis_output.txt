@@ -1,0 +1,6 @@
+depth 1: dumas lower on frob_rel 15/15, on max_rel 9/15
+  max_rel mean: strassen=19.21 dumas=5.69  median: strassen=1.68 dumas=1.00
+depth 2: dumas lower on frob_rel 15/15, on max_rel 8/15
+  max_rel mean: strassen=18.77 dumas=8.12  median: strassen=2.76 dumas=2.77
+depth 3: dumas lower on frob_rel 15/15, on max_rel 9/15
+  max_rel mean: strassen=47.23 dumas=26.63  median: strassen=5.78 dumas=5.71

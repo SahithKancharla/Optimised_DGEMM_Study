@@ -6,11 +6,11 @@ alternate-basis 2x2 matrix-multiplication algorithm ("Strassen's
 algorithm is not optimally accurate", ISSAC 2024, arXiv:2402.05630,
 Equation 36 / Table 3) as a recursive block algorithm, on top of the
 exact same pooled-arena / phase-timed / task-parallel infrastructure as
-the classic-Strassen rebuild in `avx2/ladder/strassen_rebuild.c` (Part
+the classic-Strassen rebuild in `src/avx2/ladder/strassen_rebuild.c` (Part
 J.7) -- this is FINDINGS.md Part L.4's highest-priority follow-up
 experiment.
 
-Source code lives in `avx2/ladder/`:
+Source code lives in `src/avx2/ladder/`:
 - `dumas_strassen_rebuild.c` -- the algorithm itself
 - `dumas_main.c` -- standalone CLI driver (correctness + phase-timed perf)
 - `accuracy_test.c` -- extended to run `dumas_depth1/2/3` alongside

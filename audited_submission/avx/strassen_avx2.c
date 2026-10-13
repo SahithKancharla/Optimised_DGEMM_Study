@@ -5,24 +5,32 @@
 #include <immintrin.h>
 #include <x86intrin.h>
 #include <mm_malloc.h>
-#include "../harness/count_calls.h"
+#include "../../src/harness/count_calls.h"
 
-COUNT_CALLS_DEFINE_ATOMIC(avx512_hybrid)
+COUNT_CALLS_DEFINE_ATOMIC(avx2_hybrid)
+
+/*
+ * AVX2+FMA3 port of strassen.c, for validating the Strassen+SIMD path on
+ * hardware without AVX-512. Same CUTOFF, same recursive structure and
+ * combination formulas -- only the base-case register-blocked matmul and
+ * the add_mat/sub_mat helpers are re-widthed from 512-bit (8 doubles) to
+ * 256-bit (4 doubles) vectors. See strassen.c for the AVX-512 version.
+ */
 
 #define CUTOFF 128
 #define MEMALIGN 64
 
 // -----------------------------------------------------------------------------
-// 16×8 AVX‑512 register‑blocked matmul for N ≤ CUTOFF (assumes N%8==0)
-// unroll the k‑loop by 4 to improve throughput
+// 16x4 AVX2 register-blocked matmul for N <= CUTOFF (assumes N%4==0)
+// unroll the k-loop by 4 to improve throughput
 static void matmul(double *A, double *B, double *C, int N) {
     size_t NN = (size_t)N * N;
 
     double *Ca = __builtin_assume_aligned(C, MEMALIGN);
     // Zero C in parallel
     #pragma omp parallel for
-    for (size_t i = 0; i < NN; i += 8) {
-        _mm512_store_pd(Ca + i, _mm512_setzero_pd());
+    for (size_t i = 0; i < NN; i += 4) {
+        _mm256_store_pd(Ca + i, _mm256_setzero_pd());
     }
 
     double *Aa = __builtin_assume_aligned(A, MEMALIGN);
@@ -30,56 +38,56 @@ static void matmul(double *A, double *B, double *C, int N) {
 
     #pragma omp parallel for collapse(2)
     for (int i0 = 0; i0 < N; i0 += 16) {
-        for (int j0 = 0; j0 < N; j0 += 8) {
+        for (int j0 = 0; j0 < N; j0 += 4) {
             for (int ii = 0; ii < 16 && i0 + ii < N; ii += 2) {
                 double *Arow0 = Aa + (size_t)(i0 + ii) * N;
                 double *Cptr0 = Ca + (size_t)(i0 + ii) * N + j0;
-                __m512d cvec0 = _mm512_load_pd(Cptr0);
+                __m256d cvec0 = _mm256_load_pd(Cptr0);
 
                 double *Arow1 = Aa + (size_t)(i0 + ii + 1) * N;
                 double *Cptr1 = Ca + (size_t)(i0 + ii + 1) * N + j0;
-                __m512d cvec1 = _mm512_load_pd(Cptr1);
+                __m256d cvec1 = _mm256_load_pd(Cptr1);
 
                 for (int k = 0; k + 3 < N; k += 4) {
-                    __m512d vb0 = _mm512_load_pd(Ba + (size_t)(k    ) * N + j0);
-                    __m512d vb1 = _mm512_load_pd(Ba + (size_t)(k + 1) * N + j0);
-                    __m512d vb2 = _mm512_load_pd(Ba + (size_t)(k + 2) * N + j0);
-                    __m512d vb3 = _mm512_load_pd(Ba + (size_t)(k + 3) * N + j0);
+                    __m256d vb0 = _mm256_load_pd(Ba + (size_t)(k    ) * N + j0);
+                    __m256d vb1 = _mm256_load_pd(Ba + (size_t)(k + 1) * N + j0);
+                    __m256d vb2 = _mm256_load_pd(Ba + (size_t)(k + 2) * N + j0);
+                    __m256d vb3 = _mm256_load_pd(Ba + (size_t)(k + 3) * N + j0);
 
-                    __m512d va00 = _mm512_set1_pd(Arow0[k]);
-                    __m512d va01 = _mm512_set1_pd(Arow0[k + 1]);
-                    __m512d va02 = _mm512_set1_pd(Arow0[k + 2]);
-                    __m512d va03 = _mm512_set1_pd(Arow0[k + 3]);
+                    __m256d va00 = _mm256_set1_pd(Arow0[k]);
+                    __m256d va01 = _mm256_set1_pd(Arow0[k + 1]);
+                    __m256d va02 = _mm256_set1_pd(Arow0[k + 2]);
+                    __m256d va03 = _mm256_set1_pd(Arow0[k + 3]);
 
-                    __m512d va10 = _mm512_set1_pd(Arow1[k]);
-                    __m512d va11 = _mm512_set1_pd(Arow1[k + 1]);
-                    __m512d va12 = _mm512_set1_pd(Arow1[k + 2]);
-                    __m512d va13 = _mm512_set1_pd(Arow1[k + 3]);
+                    __m256d va10 = _mm256_set1_pd(Arow1[k]);
+                    __m256d va11 = _mm256_set1_pd(Arow1[k + 1]);
+                    __m256d va12 = _mm256_set1_pd(Arow1[k + 2]);
+                    __m256d va13 = _mm256_set1_pd(Arow1[k + 3]);
 
-                    cvec0 = _mm512_fmadd_pd(va00, vb0, cvec0);
-                    cvec0 = _mm512_fmadd_pd(va01, vb1, cvec0);
-                    cvec0 = _mm512_fmadd_pd(va02, vb2, cvec0);
-                    cvec0 = _mm512_fmadd_pd(va03, vb3, cvec0);
+                    cvec0 = _mm256_fmadd_pd(va00, vb0, cvec0);
+                    cvec0 = _mm256_fmadd_pd(va01, vb1, cvec0);
+                    cvec0 = _mm256_fmadd_pd(va02, vb2, cvec0);
+                    cvec0 = _mm256_fmadd_pd(va03, vb3, cvec0);
 
-                    cvec1 = _mm512_fmadd_pd(va10, vb0, cvec1);
-                    cvec1 = _mm512_fmadd_pd(va11, vb1, cvec1);
-                    cvec1 = _mm512_fmadd_pd(va12, vb2, cvec1);
-                    cvec1 = _mm512_fmadd_pd(va13, vb3, cvec1);
+                    cvec1 = _mm256_fmadd_pd(va10, vb0, cvec1);
+                    cvec1 = _mm256_fmadd_pd(va11, vb1, cvec1);
+                    cvec1 = _mm256_fmadd_pd(va12, vb2, cvec1);
+                    cvec1 = _mm256_fmadd_pd(va13, vb3, cvec1);
                 }
 
                 // Remainder for k % 4
                 for (int k = (N & ~3); k < N; ++k) {
-                    __m512d vb = _mm512_load_pd(Ba + (size_t)k * N + j0);
-                    __m512d va0 = _mm512_set1_pd(Arow0[k]);
-                    __m512d va1 = _mm512_set1_pd(Arow1[k]);
+                    __m256d vb = _mm256_load_pd(Ba + (size_t)k * N + j0);
+                    __m256d va0 = _mm256_set1_pd(Arow0[k]);
+                    __m256d va1 = _mm256_set1_pd(Arow1[k]);
 
-                    cvec0 = _mm512_fmadd_pd(va0, vb, cvec0);
-                    cvec1 = _mm512_fmadd_pd(va1, vb, cvec1);
+                    cvec0 = _mm256_fmadd_pd(va0, vb, cvec0);
+                    cvec1 = _mm256_fmadd_pd(va1, vb, cvec1);
                 }
 
-                _mm512_store_pd(Cptr0, cvec0);
+                _mm256_store_pd(Cptr0, cvec0);
                 if (i0 + ii + 1 < N)
-                    _mm512_store_pd(Cptr1, cvec1);
+                    _mm256_store_pd(Cptr1, cvec1);
             }
         }
     }
@@ -90,7 +98,7 @@ static void matmul(double *A, double *B, double *C, int N) {
 // the rest is identical scratch‑copy Strassen…
 
 static inline double* aligned_alloc_mat(int n) {
-    COUNT_BYTES_ATOMIC(avx512_hybrid, (size_t)n * n * sizeof(double));
+    COUNT_BYTES_ATOMIC(avx2_hybrid, (size_t)n * n * sizeof(double));
     double *p = _mm_malloc((size_t)n * n * sizeof(double), MEMALIGN);
     if (!p) { perror("alloc"); exit(1); }
     return p;
@@ -101,10 +109,10 @@ static inline void add_mat(const double *A, const double *B, double *C, int n) {
     const double *Aa = __builtin_assume_aligned(A, MEMALIGN),
                   *Ba = __builtin_assume_aligned(B, MEMALIGN);
     double       *Ca = __builtin_assume_aligned(C, MEMALIGN);
-    for (; i + 8 <= N2; i += 8) {
-        __m512d va = _mm512_load_pd(Aa + i);
-        __m512d vb = _mm512_load_pd(Ba + i);
-        _mm512_store_pd(Ca + i, _mm512_add_pd(va, vb));
+    for (; i + 4 <= N2; i += 4) {
+        __m256d va = _mm256_load_pd(Aa + i);
+        __m256d vb = _mm256_load_pd(Ba + i);
+        _mm256_store_pd(Ca + i, _mm256_add_pd(va, vb));
     }
     for (; i < N2; ++i) {
         Ca[i] = Aa[i] + Ba[i];
@@ -116,10 +124,10 @@ static inline void sub_mat(const double *A, const double *B, double *C, int n) {
     const double *Aa = __builtin_assume_aligned(A, MEMALIGN),
                   *Ba = __builtin_assume_aligned(B, MEMALIGN);
     double       *Ca = __builtin_assume_aligned(C, MEMALIGN);
-    for (; i + 8 <= N2; i += 8) {
-        __m512d va = _mm512_load_pd(Aa + i);
-        __m512d vb = _mm512_load_pd(Ba + i);
-        _mm512_store_pd(Ca + i, _mm512_sub_pd(va, vb));
+    for (; i + 4 <= N2; i += 4) {
+        __m256d va = _mm256_load_pd(Aa + i);
+        __m256d vb = _mm256_load_pd(Ba + i);
+        _mm256_store_pd(Ca + i, _mm256_sub_pd(va, vb));
     }
     for (; i < N2; ++i) {
         Ca[i] = Aa[i] - Ba[i];
@@ -139,7 +147,7 @@ static void copy_block(const double *src, int N, int row0, int col0,
 static void strassen_rec(const double *A, const double *B,
                          double *C, int N)
 {
-    COUNT_CALL_ATOMIC(avx512_hybrid);
+    COUNT_CALL_ATOMIC(avx2_hybrid);
     if (N <= CUTOFF) {
         matmul((double*)A, (double*)B, C, N);
         return;
@@ -227,7 +235,7 @@ static void strassen_rec(const double *A, const double *B,
             C[i * N + j]       = P5[ij] + P4[ij] - P2[ij] + P6[ij];
             C[i * N + j + k]   = P1[ij] + P2[ij];
             C[(i + k) * N + j] = P3[ij] + P4[ij];
-            C[(i + k) * N + j + k] = 
+            C[(i + k) * N + j + k] =
                 P5[ij] + P1[ij] - P3[ij] - P7[ij];
         }
     }
@@ -251,13 +259,13 @@ void strassen(double *A, double *B, double *C, int N) {
     int size = 1;
     while (size < N) size <<= 1;
     // matmul()'s register-blocked base case (above) assumes N is a multiple
-    // of 8 and unconditionally issues full 8-wide _mm512_load_pd/store_pd
-    // even on the last row/column, so it also needs N >= 8: without this,
-    // N in {0,1,2,4} (all powers of two < 8, e.g. size==N==4) would reach
+    // of 4 and unconditionally issues full 4-wide _mm256_load_pd/store_pd
+    // even on the last row/column, so it also needs N >= 4: without this,
+    // N in {0,1,2} (all powers of two < 4, e.g. size==N==2) would reach
     // matmul() directly below with a buffer too small for its fixed-width
     // vector ops -- a heap buffer over-read/over-write. N<=0 has the same
-    // problem (size floors at 1, still < 8).
-    if (size < 8) size = 8;
+    // problem (size floors at 1, still < 4).
+    if (size < 4) size = 4;
 
     if (size == N) {
         #pragma omp parallel

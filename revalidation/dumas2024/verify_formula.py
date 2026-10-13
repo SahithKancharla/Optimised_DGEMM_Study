@@ -5,7 +5,7 @@ algorithm is not optimally accurate", ISSAC 2024, arXiv:2402.05630,
 Equation 36 / Table 3), transcribed from the paper's straight-line
 program, adjusted to standard row-major A[i][j]/B[i][j] indexing.
 
-Run before writing avx2/ladder/dumas_strassen_rebuild.c, to catch a
+Run before writing src/avx2/ladder/dumas_strassen_rebuild.c, to catch a
 transcription error (the paper's a_ij/b_ij subscript convention turned
 out to put a12 where row-major indexing puts a21, and vice versa --
 this script is what caught that, by brute-force searching input/output

@@ -2,7 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <omp.h>
-#include "../harness/count_calls.h"
+#include "../../src/harness/count_calls.h"
 
 COUNT_CALLS_DEFINE_ATOMIC(parallel_pure)
 

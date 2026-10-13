@@ -55,53 +55,68 @@ dkms.conf
 # not caught by the *.exe/*.out patterns above). Every entry here has a
 # same-named .c/.S source tracked right next to it -- rebuild with the
 # matching build.sh/tune_blocking.sh rather than committing the binary.
-baselines/bin/
-avx2/sweep/bin/
-avx2/tune_bin/
-avx2/asm_kernel/tune_bin/
-avx2/matmul_avx2_tuned
-avx2/matmul_v2_swap
-avx2/matmul_v3_unroll_prefetch
-avx2/matmul_v4_retuned
-avx2/matmul_v4_threading
-avx2/matmul_v5_unroll4
-avx2/matmul_v6_mr6
-avx2/matmul_v6_retuned
-avx2/matmul_v7_4x12
-avx2/matmul_v7_retuned
-avx2/asm_kernel/matmul_asm
-avx2/asm_kernel/matmul_asm_v2_retuned
-avx2/asm_kernel/matmul_asm_v2_vecpack
-avx2/asm_kernel/matmul_asm_v3_transpack
-avx2/asm_kernel/matmul_asm_v4_dynsched
-avx2/asm_kernel/matmul_asm_v4_retuned
-avx2/asm_kernel/matmul_asm_v5_cprefetch
-avx2/asm_kernel/test_kernel_standalone
-avx2/asm_kernel/v4_blis_params
-avx2/portable/matmul_portable
-accuracy/bench_accuracy
-strassen2/bench_strassen
-strassen2/test_strassen
-roofline/stream_triad
-topology/classify_cores
-topology/classify_cores_native
+src/baselines/bin/
+src/avx2/sweep/bin/
+src/avx2/tune_bin/
+src/avx2/asm_kernel/tune_bin/
+src/avx2/matmul_avx2_tuned
+src/avx2/matmul_v2_swap
+src/avx2/matmul_v3_unroll_prefetch
+src/avx2/matmul_v4_retuned
+src/avx2/matmul_v4_threading
+src/avx2/matmul_v5_unroll4
+src/avx2/matmul_v6_mr6
+src/avx2/matmul_v6_retuned
+src/avx2/matmul_v7_4x12
+src/avx2/matmul_v7_retuned
+src/avx2/asm_kernel/matmul_asm
+src/avx2/asm_kernel/matmul_asm_v2_retuned
+src/avx2/asm_kernel/matmul_asm_v2_vecpack
+src/avx2/asm_kernel/matmul_asm_v3_transpack
+src/avx2/asm_kernel/matmul_asm_v4_dynsched
+src/avx2/asm_kernel/matmul_asm_v4_retuned
+src/avx2/asm_kernel/matmul_asm_v5_cprefetch
+src/avx2/asm_kernel/test_kernel_standalone
+src/avx2/asm_kernel/v4_blis_params
+src/avx2/portable/matmul_portable
+src/accuracy/bench_accuracy
+src/strassen2/bench_strassen
+src/strassen2/test_strassen
+src/roofline/stream_triad
+src/topology/classify_cores
+src/topology/classify_cores_native
 
 # Auto-generated microkernel sweep sources -- regenerate with
-# `python3 avx2/gen_kernels.py` (uses avx2/kernel_template.c.in); only the
+# `python3 src/avx2/gen_kernels.py` (uses src/avx2/kernel_template.c.in); only the
 # template and generator are hand-maintained.
-avx2/sweep/kernel_*.c
-avx2/sweep/manifest.csv
+src/avx2/sweep/kernel_*.c
+src/avx2/sweep/manifest.csv
 
 # Scratch outputs of tuning/diagnostic scripts -- regenerate by rerunning
 # the corresponding .sh/.c (tune_blocking*.sh, classify_cores*). Final
 # curated benchmark results referenced by FINDINGS.md/the paper are
 # committed separately (as named result CSVs, not these scratch ones).
-avx2/tune_results*.csv
-avx2/best_blocking*.txt
-avx2/asm_kernel/tune_results*.csv
-avx2/asm_kernel/best_blocking*.txt
-topology/core_classification.csv
-topology/core_classification_native.csv
+src/avx2/tune_results*.csv
+src/avx2/best_blocking*.txt
+src/avx2/asm_kernel/tune_results*.csv
+src/avx2/asm_kernel/best_blocking*.txt
+src/topology/core_classification.csv
+src/topology/core_classification_native.csv
+
+# Per-machine output of reproduce.sh / reproduce.ps1 -- regenerate by
+# running them; results/run_log.csv is meant to be collected by hand
+# from each machine you run it on, not auto-committed from any one of them.
+results/
+
+# LaTeX build artifacts (paper/main.pdf itself is tracked; these aren't)
+paper/*.aux
+paper/*.blg
+paper/*.bbl
+paper/*.log
+paper/*.fls
+paper/*.fdb_latexmk
+paper/*.synctex.gz
+paper/*.out
 
 # Misc
 /tmp/

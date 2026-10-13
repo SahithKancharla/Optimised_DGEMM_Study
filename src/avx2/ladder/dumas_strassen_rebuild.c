@@ -118,6 +118,11 @@ static void dumas_leaf_gemm(const double *A, const double *B, double *C, int n,
 }
 
 static int dumas_g_cutoff, dumas_g_max_depth, dumas_g_KC, dumas_g_MC, dumas_g_NC;
+/* Same thread-aware, leaf-size-guarded task policy as
+   strassen_rebuild.c -- see that file's comment. */
+#define DUMAS_TASK_THREAD_THRESHOLD 8
+#define DUMAS_MIN_LEAF_FOR_FULL_THREADS 512
+static int dumas_g_use_tasks;
 static size_t dumas_workspace_doubles_needed(int N, int cutoff, int max_depth);
 
 static void dumas_rec(const double *A, const double *B, double *C, int N,
@@ -196,19 +201,19 @@ static void dumas_rec(const double *A, const double *B, double *C, int N,
     st->sched_s += ladder_now() - tsc0;
 
     double ttask0 = ladder_now();
-    #pragma omp task shared(P1) if (N > dumas_g_cutoff*4)
+    #pragma omp task shared(P1) if (dumas_g_use_tasks && N > dumas_g_cutoff*4)
     { dumas_arena_t sub = { sub_base[0], 0, child_ws }; dumas_rec(L1, R1, P1, k, depth+1, &sub, st); }
-    #pragma omp task shared(P2) if (N > dumas_g_cutoff*4)
+    #pragma omp task shared(P2) if (dumas_g_use_tasks && N > dumas_g_cutoff*4)
     { dumas_arena_t sub = { sub_base[1], 0, child_ws }; dumas_rec(L2, R2, P2, k, depth+1, &sub, st); }
-    #pragma omp task shared(P3) if (N > dumas_g_cutoff*4)
+    #pragma omp task shared(P3) if (dumas_g_use_tasks && N > dumas_g_cutoff*4)
     { dumas_arena_t sub = { sub_base[2], 0, child_ws }; dumas_rec(L3, R3, P3, k, depth+1, &sub, st); }
-    #pragma omp task shared(P4) if (N > dumas_g_cutoff*4)
+    #pragma omp task shared(P4) if (dumas_g_use_tasks && N > dumas_g_cutoff*4)
     { dumas_arena_t sub = { sub_base[3], 0, child_ws }; dumas_rec(L4, R4, P4, k, depth+1, &sub, st); }
-    #pragma omp task shared(P5) if (N > dumas_g_cutoff*4)
+    #pragma omp task shared(P5) if (dumas_g_use_tasks && N > dumas_g_cutoff*4)
     { dumas_arena_t sub = { sub_base[4], 0, child_ws }; dumas_rec(L5, R5, P5, k, depth+1, &sub, st); }
-    #pragma omp task shared(P6) if (N > dumas_g_cutoff*4)
+    #pragma omp task shared(P6) if (dumas_g_use_tasks && N > dumas_g_cutoff*4)
     { dumas_arena_t sub = { sub_base[5], 0, child_ws }; dumas_rec(L6, R6, P6, k, depth+1, &sub, st); }
-    #pragma omp task shared(P7) if (N > dumas_g_cutoff*4)
+    #pragma omp task shared(P7) if (dumas_g_use_tasks && N > dumas_g_cutoff*4)
     { dumas_arena_t sub = { sub_base[6], 0, child_ws }; dumas_rec(L7, R7, P7, k, depth+1, &sub, st); }
     #pragma omp taskwait
     #pragma omp atomic
@@ -257,6 +262,8 @@ double* dumas_strassen_rebuild(const double *A, const double *B, int N, int cuto
     memset(st, 0, sizeof(*st));
     dumas_g_cutoff = cutoff; dumas_g_max_depth = max_depth;
     dumas_g_KC = KC; dumas_g_MC = MC; dumas_g_NC = NC;
+    dumas_g_use_tasks = (nthreads <= DUMAS_TASK_THREAD_THRESHOLD) ||
+                        (cutoff < DUMAS_MIN_LEAF_FOR_FULL_THREADS);
 
     size_t arena_size = dumas_workspace_doubles_needed(N, cutoff, max_depth) + 1024;
     double *arena_base = aligned_alloc_d(arena_size);
@@ -265,11 +272,15 @@ double* dumas_strassen_rebuild(const double *A, const double *B, int N, int cuto
     double *C = aligned_alloc_d((size_t)N*N);
 
     omp_set_num_threads(nthreads);
-    omp_set_max_active_levels(1);
     double t0 = ladder_now();
-    #pragma omp parallel
-    #pragma omp single nowait
-    dumas_rec(A, B, C, N, 0, &arena, st);
+    if (dumas_g_use_tasks) {
+        omp_set_max_active_levels(1);
+        #pragma omp parallel
+        #pragma omp single nowait
+        dumas_rec(A, B, C, N, 0, &arena, st);
+    } else {
+        dumas_rec(A, B, C, N, 0, &arena, st);
+    }
     st->total_s = ladder_now() - t0;
 
     aligned_free_d(arena_base);

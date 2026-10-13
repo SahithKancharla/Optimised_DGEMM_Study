@@ -1,32 +1,49 @@
 # Paper draft
 
-`main.tex` + `references.bib` is a full draft of the paper, structured
-around FINDINGS.md Part L.3's three headline contributions (the
-correctness audit, §4; the virtualization measurement-bias case study,
-§5; and the Dumas et al. 2024 Strassen variant from Part M, §6) with
-everything else as supporting/appendix material (§7). Every section is
-drafted from real, already-executed results — abstract, introduction,
-related work, methodology, all three headline sections, supporting
-material, discussion/threats, and conclusion are written prose with real
+`main.tex` + `references.bib` is a full draft of the paper — the
+"spine" (structure, argument, and every headline number) is complete
+and locked in, not a scaffold. Structured around FINDINGS.md Part L.3's
+three headline contributions (the correctness audit, §4; the
+virtualization measurement-bias case study, §5; and the Dumas et al.
+2024 Strassen variant from Part M, §6) with everything else as
+supporting/appendix material (§7). Every section — abstract,
+introduction, related work, methodology, all three headline sections
+(including a worked numerical example in §4 and a settled $n=30$
+statistical-protocol target in §3.2), supporting material, discussion/
+threats, conclusion, and acknowledgments — is written prose with real
 numbers pulled from FINDINGS.md and the `revalidation/` CSVs, not
-placeholder headers. `main.pdf` is a compiled preview (built with
-[tectonic](https://tectonic-typesetting.github.io/), last verified clean
-— zero errors, one sub-point overfull-hbox warning — 2026-09-09) — safe
+placeholder headers.
+
+**Reworked to ACM TOMS style 2026-10-12** (see
+`../../PAPER_TARGET_VENUE.md`, one level above the repo, for the venue
+decision/rationale): real `acmart` class (`acmsmall` format, ACM's
+Transactions-family format), a plain descriptive title (TOMS's own
+author guidance explicitly says to avoid "cute" titles), an
+impersonal 150–200-word abstract with no first person and no citation
+numbers (TOMS-specific rules, not general ACM style), CCS concepts +
+keywords in place of the old plain-`article` preamble, and
+`\bibliographystyle{ACM-Reference-Format}`. Only the frontmatter
+changed — the section content is the same research. `main.pdf` is a
+compiled preview (via `tectonic`, see below) — **real acmart
+compilation, not a guess**: zero LaTeX errors, zero unresolved
+cross-references or citations in the final pass, only cosmetic
+underfull-hbox/font-substitution warnings (verified 2026-10-12) — safe
 to delete and regenerate, not something to hand-edit.
 
 ## What's still `\todo{}` — genuinely only you can fill these in
 
-- Author name(s), affiliation(s), corresponding email (top of `main.tex`).
-- §3.2's exact repetition count `n` for the bootstrap-CI protocol (a
-  placeholder `n=20`–`30` is suggested, following Davis 2025).
-- §4's optional worked numerical example for the $C=BA$-not-$AB$ bug
-  (nice-to-have for concreteness, not required).
+Down to 2 markers:
 - §9's top-level reproducibility README + license + Zenodo DOI (the
   per-directory READMEs already exist; this is the one remaining
   end-to-end step, per FINDINGS.md Part L.3.2).
-- Acknowledgments (end of the document).
+- Any additional funding/advisor/reviewer acknowledgments beyond the
+  `glogin.cs.vt.edu` access note already there (now inside `\begin{acks}`).
 
-Everything else in the document is complete prose, not a stub.
+Also worth a human pass before actually submitting: the ACM metadata
+placeholders near the top of `main.tex` (`\acmVolume`, `\acmNumber`,
+`\acmDOI`, etc. — assigned by ACM at acceptance, not fillable now) and
+the CCS concept codes (best-effort, not re-verified against ACM's live
+classification tool at dl.acm.org/ccs).
 
 ## Using this in Overleaf
 
@@ -34,45 +51,25 @@ Everything else in the document is complete prose, not a stub.
    `paper/` folder as a zip (`main.tex` + `references.bib`; drop
    `main.pdf`, Overleaf will rebuild it). Or: New Project → Blank
    Project, then upload the two files individually.
-2. Overleaf auto-detects `main.tex` as the root document and compiles
-   with `pdflatex` by default — that matches what this file was written
-   and tested against (via `tectonic`, a standards-compliant LaTeX
-   engine; both target the same `article`-class output). No extra
-   Overleaf settings should be needed.
-3. To keep iterating locally instead: `pdflatex main.tex && bibtex main
-   && pdflatex main.tex && pdflatex main.tex` (two passes after bibtex
-   so citations and the table of contents settle), or simply
-   `tectonic main.tex` if you have the standalone engine (no full
-   TeX Live install needed — see the one-off install note below).
-
-## What's real vs. placeholder right now
-
-Every `\todo{...}` marker is a real gap — either a section that needs
-prose written, or a specific table/figure that needs pulling from a
-named CSV in `revalidation/`. Everything **not** marked `\todo` is
-already drafted from real, executed results (the correctness-bug list
-in §4, the virtualization case study's claim/method/result in §5, and
-all of §6 on the Dumas 2024 variant, including the performance table)
-— re-derive exact numbers from the source CSVs named inline rather than
-retyping them from the PDF if anything changes upstream.
+2. Overleaf has ACM's official `acmart` template preinstalled, so this
+   compiles with zero extra setup there — same as the plain-`article`
+   version before it. Default `pdflatex` compiler is fine.
+3. To keep iterating locally instead without a system LaTeX install:
+   `tectonic main.tex` (see below) — or, with a full TeX Live install,
+   `pdflatex main.tex && bibtex main && pdflatex main.tex && pdflatex main.tex`.
 
 ## Venue
 
-Not yet chosen. FINDINGS.md Part L.3 recommends, in order: ACM TOMS's
-Replicated Computational Results track (best fit for §4 alone), the
-PMBS workshop (SC-colocated; best fit for §5), or an arXiv preprint
-immediately regardless of either. Swapping `\documentclass{article}`
-for `acmart` (with the appropriate journal/proceedings options) is the
-only preamble change either ACM venue would require — the section
-structure and content below the preamble should not need to change for
-that swap.
+Decided: **ACM TOMS**, pursuing the RCR track (see
+`../../PAPER_TARGET_VENUE.md` for the full rationale and
+pre-submission checklist). CCPE (Wiley) is the explicit fallback if
+TOMS doesn't work out.
 
 ## Local compile note (no system LaTeX install required)
 
-This was verified to compile clean (zero warnings, `article` class +
-`amsmath`/`booktabs`/`graphicx`/`hyperref`/`xcolor`/`microtype`) using a
-standalone `tectonic` binary, which needs no system TeX Live install and
-no root/admin access — useful if iterating outside Overleaf:
+Verified to compile clean (real `acmart`/`acmsmall`, zero errors) using
+a standalone `tectonic` binary, which needs no system TeX Live install
+and no root/admin access:
 ```
 curl -L -o tectonic.tar.gz \
   https://github.com/tectonic-typesetting/tectonic/releases/download/tectonic%400.15.0/tectonic-0.15.0-x86_64-unknown-linux-gnu.tar.gz

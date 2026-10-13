@@ -2,7 +2,9 @@
  * avx2/asm_kernel/matmul_asm_v3_transpack.c, refactored into a reusable
  * dgemm_base(A,ldA,B,ldB,C,ldC,n) library call with independent leading
  * dimensions -- see dgemm_base.h for why. Blocking fixed at this dev
- * machine's proven-good KC=1024/MC=576/NC=1024 (see FINDINGS.md B.8/B.9);
+ * machine's proven-good KC=1024/MC=576/NC=1024 (see FINDINGS.md B.8/B.9;
+ * a later sweep suggested MC=672, but a head-to-head rerun showed no
+ * measurable difference, so 576 was kept).
  * Strassen's recursive sub-problems are smaller than the top-level N, and
  * the packing/blocking loops already clamp MC/NC to min(MC,n)/min(NC,n),
  * so smaller n is handled correctly, just with less blocking benefit at

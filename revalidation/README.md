@@ -100,22 +100,22 @@ LaTeX paper outline.
 
 ### Bugs found and fixed (2026-09-09)
 
-1. `avx/matmul.c` computed `C = B·A` instead of `C = A·B` (packing bug).
+1. `audited_submission/avx/matmul.c` computed `C = B·A` instead of `C = A·B` (packing bug).
 2. `mm_parallel_blocked.c`/`mm_parallel_blocked_unrolled.c` had a data race
    (parallelized over the reduction dimension without synchronization; only
    "worked" by static-scheduling coincidence).
-3. `avx/strassen.c` silently dropped a row/column for non-power-of-2 N > 128
+3. `audited_submission/avx/strassen.c` silently dropped a row/column for non-power-of-2 N > 128
    (no padding, unlike the Serial/Parallel Strassen variants).
-4. `test/run.sh`/`test/main.c` segfaulted on a clean checkout (missing
+4. `audited_submission/test/run.sh`/`audited_submission/test/main.c` segfaulted on a clean checkout (missing
    `Values/`/`Results/` dirs, no `fopen` NULL-check downstream).
 
 See the correctness log for evidence and exact fixes; see
-`avx/kernel_avx2.c` / `avx/strassen_avx2.c` / `avx/run_local_avx2.sh` for a
+`audited_submission/avx/kernel_avx2.c` / `audited_submission/avx/strassen_avx2.c` / `audited_submission/avx/run_local_avx2.sh` for a
 way to re-run correctness checks on AVX2-only hardware going forward.
 
 ### Known limitation, not fixed
 
-`strassen()` (`avx/strassen.c`) segfaults if called directly on N ∈ {1, 2}
+`strassen()` (`audited_submission/avx/strassen.c`) segfaults if called directly on N ∈ {1, 2}
 (or N=4 for the AVX-512 build) — the no-padding fast path feeds a
 smaller-than-vector-width N straight into the register-blocked base-case
 kernel. Outside the paper's tested range (N≥64); listed here so it isn't

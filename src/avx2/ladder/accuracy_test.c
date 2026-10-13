@@ -84,11 +84,23 @@ static void fill_cancel(double *M, int N) {
         for (int j = 0; j < N; j++)
             M[(size_t)i*N+j] = ((i+j) % 2 == 0 ? 1.0 : -1.0) * (1e6 + rnd_uniform());
 }
+/* Row-correlated scaling (per src/accuracy/distributions.c's
+   dist_wide_dynamic_range) -- the construction that triggers
+   catastrophic error; per-entry scaling (fill_wide_range) does not. */
+static void fill_row_scaled_ill_cond(double *M, int N) {
+    for (int i = 0; i < N; i++) {
+        double exponent = rnd01() * 12.0 - 6.0; /* -6 .. +6 */
+        double scale = pow(10.0, exponent);
+        for (int j = 0; j < N; j++)
+            M[(size_t)i*N+j] = rnd_uniform() * scale;
+    }
+}
 
 typedef struct { const char *name; fill_fn fn; } dist_t;
 static dist_t DISTS[] = {
     {"uniform", fill_uniform}, {"gaussian", fill_gaussian},
     {"wide_range", fill_wide_range}, {"ill_cond", fill_ill_cond}, {"cancel", fill_cancel},
+    {"row_scaled_ill_cond", fill_row_scaled_ill_cond},
 };
 
 /* independent long-double reference -- deliberately NOT calling anything

@@ -2,14 +2,12 @@
 #include <stdlib.h>
 #include <string.h>
 #include <omp.h>
-#include "../harness/count_calls.h"
+#include "../../src/harness/count_calls.h"
 
-COUNT_CALLS_DEFINE_ATOMIC(parallel_hybrid_unrolled)
-
-static const int cutoff = 128;
+COUNT_CALLS_DEFINE(serial_hybrid_unrolled)
 
 static double* initializeMatrix1D(int n) {
-    COUNT_BYTES_ATOMIC(parallel_hybrid_unrolled, (size_t)n * n * sizeof(double));
+    COUNT_BYTES(serial_hybrid_unrolled, (size_t)n * n * sizeof(double));
     return (double*)calloc(n * n, sizeof(double));
 }
 
@@ -24,7 +22,7 @@ static void subtractMatrix(double* A, double* B, double* C, int n) {
 }
 
 static double* strassenMultiplyUnrolled(double* A, double* B, int n) {
-    COUNT_CALL_ATOMIC(parallel_hybrid_unrolled);
+    COUNT_CALL(serial_hybrid_unrolled);
     if (n <= 128) {
         double* C = initializeMatrix1D(n);
         for (int i = 0; i < n; i++) {
@@ -41,7 +39,7 @@ static double* strassenMultiplyUnrolled(double* A, double* B, int n) {
                     C[i * n + j] += a_ik * B[k * n + j];
                 }
             }
-        }
+        }        
         return C;
     }
 
@@ -63,73 +61,24 @@ static double* strassenMultiplyUnrolled(double* A, double* B, int n) {
         }
     }
 
-    double *P1, *P2, *P3, *P4, *P5, *P6, *P7;
-
-    #pragma omp parallel
-    {
-        #pragma omp single nowait
-        {
-            #pragma omp task shared(P1)
-            {
-                double* s1 = initializeMatrix1D(k);
-                subtractMatrix(B12, B22, s1, k);
-                P1 = strassenMultiplyUnrolled(A11, s1, k);
-                free(s1);
-            }
-            #pragma omp task shared(P2)
-            {
-                double* s1 = initializeMatrix1D(k);
-                addMatrix(A11, A12, s1, k);
-                P2 = strassenMultiplyUnrolled(s1, B22, k);
-                free(s1);
-            }
-            #pragma omp task shared(P3)
-            {
-                double* s1 = initializeMatrix1D(k);
-                addMatrix(A21, A22, s1, k);
-                P3 = strassenMultiplyUnrolled(s1, B11, k);
-                free(s1);
-            }
-            #pragma omp task shared(P4)
-            {
-                double* s1 = initializeMatrix1D(k);
-                subtractMatrix(B21, B11, s1, k);
-                P4 = strassenMultiplyUnrolled(A22, s1, k);
-                free(s1);
-            }
-            #pragma omp task shared(P5)
-            {
-                double* s1 = initializeMatrix1D(k);
-                double* s2 = initializeMatrix1D(k);
-                addMatrix(A11, A22, s1, k);
-                addMatrix(B11, B22, s2, k);
-                P5 = strassenMultiplyUnrolled(s1, s2, k);
-                free(s1);
-                free(s2);
-            }
-            #pragma omp task shared(P6)
-            {
-                double* s1 = initializeMatrix1D(k);
-                double* s2 = initializeMatrix1D(k);
-                subtractMatrix(A12, A22, s1, k);
-                addMatrix(B21, B22, s2, k);
-                P6 = strassenMultiplyUnrolled(s1, s2, k);
-                free(s1);
-                free(s2);
-            }
-            #pragma omp task shared(P7)
-            {
-                double* s1 = initializeMatrix1D(k);
-                double* s2 = initializeMatrix1D(k);
-                subtractMatrix(A11, A21, s1, k);
-                addMatrix(B11, B12, s2, k);
-                P7 = strassenMultiplyUnrolled(s1, s2, k);
-                free(s1);
-                free(s2);
-            }
-            #pragma omp taskwait
-        }
-    }
+    double *S1 = initializeMatrix1D(k), *S2 = initializeMatrix1D(k);
+    subtractMatrix(B12, B22, S1, k);
+    double* P1 = strassenMultiplyUnrolled(A11, S1, k);
+    addMatrix(A11, A12, S1, k);
+    double* P2 = strassenMultiplyUnrolled(S1, B22, k);
+    addMatrix(A21, A22, S1, k);
+    double* P3 = strassenMultiplyUnrolled(S1, B11, k);
+    subtractMatrix(B21, B11, S1, k);
+    double* P4 = strassenMultiplyUnrolled(A22, S1, k);
+    addMatrix(A11, A22, S1, k);
+    addMatrix(B11, B22, S2, k);
+    double* P5 = strassenMultiplyUnrolled(S1, S2, k);
+    subtractMatrix(A12, A22, S1, k);
+    addMatrix(B21, B22, S2, k);
+    double* P6 = strassenMultiplyUnrolled(S1, S2, k);
+    subtractMatrix(A11, A21, S1, k);
+    addMatrix(B11, B12, S2, k);
+    double* P7 = strassenMultiplyUnrolled(S1, S2, k);
 
     double *C11 = initializeMatrix1D(k), *C12 = initializeMatrix1D(k), *C21 = initializeMatrix1D(k), *C22 = initializeMatrix1D(k);
     for (int i = 0; i < size; i++) {
@@ -151,14 +100,15 @@ static double* strassenMultiplyUnrolled(double* A, double* B, int n) {
 
     free(A11); free(A12); free(A21); free(A22);
     free(B11); free(B12); free(B21); free(B22);
-    free(C11); free(C12); free(C21); free(C22);
     free(P1); free(P2); free(P3); free(P4);
     free(P5); free(P6); free(P7);
+    free(C11); free(C12); free(C21); free(C22);
+    free(S1); free(S2);
 
     return C;
 }
 
-double* mm_parallel_strassen_unrolled(int nthreads, int rows, int cols_a, int cols_b) {
+double* mm_strassen_unrolled(int nthreads, int rows, int cols_a, int cols_b) {
     omp_set_num_threads(nthreads);
 
     double *A = (double *)malloc(rows * cols_a * sizeof(double));
@@ -198,7 +148,7 @@ double* mm_parallel_strassen_unrolled(int nthreads, int rows, int cols_a, int co
         for (int j = 0; j < cols_b; j++)
             C[i * cols_b + j] = C_mat[i * size + j];
 
-    FILE *ftime = fopen("Values/parallel.txt", "a");
+    FILE *ftime = fopen("Values/time_strassen_unrolled.txt", "a");
     fprintf(ftime, "%f\n", elapsed_time);
     fclose(ftime);
 
