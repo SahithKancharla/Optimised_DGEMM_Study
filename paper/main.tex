@@ -81,13 +81,14 @@ numerical-accuracy discussion can be extended with a current
 literature result not yet benchmarked anywhere. A correctness audit
 finds and fixes four real, execution-verified bugs, the most serious a
 packing error that silently computes the product in the wrong order
-for non-square shapes. A large, roughly two-times OpenMP
+for non-square shapes; first execution on real AVX-512 hardware exposes
+a fifth, an alignment crash, and measures roughly 2$\times$
+blocked-DGEMM gains over AVX2. A large, roughly two-times OpenMP
 dynamic-scheduling performance win, first measured under
 virtualization, is shown through controlled, repeated measurement --
 including the heterogeneous performance/efficiency-core case
 scheduling theory favors most -- not to reproduce; only core placement
-survives repetition, extending a general measurement-bias methodology
-into a new domain. A 2024 accuracy-optimized alternate-basis Strassen
+survives repetition. A 2024 accuracy-optimized alternate-basis Strassen
 variant is implemented as a real recursive block algorithm, its
 formula symbolically verified against the source paper's straight-line
 program first, catching a transcription error. Measured under
@@ -197,7 +198,11 @@ not measure.
     significant a packing bug that silently computed $B \cdot A$
     instead of $A \cdot B$; a second-pass, repo-wide sweep found and
     fixed six further bugs, including a regression introduced by this
-    audit's own first-pass fix. See Section \ref{sec:audit}.
+    audit's own first-pass fix. A further bug, an aligned-load crash
+    in the AVX-512 micro-kernel for sizes not divisible by eight, was
+    found only once the code was executed on real AVX-512 hardware, where
+    AVX-512 is also measured against the AVX2 port at $n{=}30$. See
+    Sections \ref{sec:audit} and \ref{sec:avx512}.
   \item \textbf{A measurement-bias case study}: a large (2$\times$-class)
     OpenMP dynamic-scheduling performance win does not reproduce under
     proper repeated measurement -- including in the heterogeneous
@@ -374,10 +379,12 @@ future work rather than a section of its own.
 
 No machine used anywhere in this project is the audited paper's target
 platform (a dual-socket Intel Xeon Gold 5218 / Cascade Lake cluster
-node with AVX-512), and AVX-512 hardware was not reachable at any point
-in this project -- stated plainly here and returned to in
-Section~\ref{sec:threats}, not glossed over. Two machines were used
-throughout:
+node with AVX-512), and AVX-512 hardware was not reachable during the
+audit and the measurements of Sections~\ref{sec:vmcase}--\ref{sec:supporting};
+a laptop-class AVX-512 machine became available afterwards and is used
+only for Section~\ref{sec:avx512} -- stated plainly here and returned to
+in Section~\ref{sec:threats}, not glossed over. Two machines were used
+throughout, plus a third for Section~\ref{sec:avx512}:
 
 \begin{itemize}
   \item \textbf{Development machine}: a single-socket Intel Core
@@ -416,6 +423,14 @@ throughout:
     Lake target), so generic \texttt{cache-references}/
     \texttt{cache-misses} and \texttt{L1-dcache-*} events substitute
     throughout Section~\ref{sec:supporting}'s root-cause analysis.
+  \item \textbf{AVX-512 laptop (Section~\ref{sec:avx512} only)}: an
+    Intel Core i5-1145G7 (Tiger Lake, 4 cores / 8 threads, 16\,GB RAM),
+    under WSL2 (Ubuntu~26.04, gcc~15.2.0). \texttt{cpuinfo} reports
+    \texttt{avx512f}/\texttt{dq}/\texttt{bw}/\texttt{vl}/\texttt{vnni}/
+    \texttt{ifma}. Threads are not pinned, hardware counters are
+    unavailable (WSL2), and a single 512-bit FMA unit per core and
+    likely frequency throttling make absolute throughput unrepresentative
+    of the audited paper's Xeon target.
 \end{itemize}
 
 \subsection{The repeated-measurement protocol}
@@ -481,7 +496,8 @@ obtainable anywhere in this project (Section~\ref{sec:threats}).
 
 We audited the paper's own codebase (\texttt{audited\_submission/avx/}, \texttt{audited\_submission/Parallel/},
 \texttt{audited\_submission/test/}) against its own description, using two independent
-verification paths since no AVX-512 hardware was available: a temporary
+verification paths since no AVX-512 hardware was available at that stage
+(real AVX-512 execution is reported in Section~\ref{sec:avx512}): a temporary
 scalar stand-in kernel (same packed-buffer contract, no intrinsics, not
 kept in the repository afterward) that let the real packing/blocking
 control logic execute and be checked on any CPU during the audit
@@ -590,6 +606,138 @@ before/after, a re-runnable script) rather than a claim taken on faith
 Computational Results designation exists to let an independent
 reviewer verify directly (Section~\ref{sec:related}), regardless of
 whether the audited implementation itself was ever published.
+
+\subsection{First Execution on Real AVX-512 Hardware}
+\label{sec:avx512}
+
+Every result above was obtained without executing the audited AVX-512
+micro-kernel itself. Late in the project an AVX-512-capable machine
+became available (Section~\ref{sec:environments}: Core i5-1145G7, WSL2,
+gcc~15.2.0, \texttt{-O3 -march=skylake-avx512 -fopenmp}), and the
+audited \texttt{kernel.c}, \texttt{matmul.c} and \texttt{strassen.c}
+were built and run unmodified, using the repository's own
+\texttt{test\_local.c} as a gate.
+
+\paragraph{A fifth bug, visible only on real hardware.}
+The suite crashed with a segmentation fault at $N{=}25$.
+AddressSanitizer localized it to an aligned 512-bit load
+(\texttt{\_mm512\_load\_pd}) in the full 24-row fast path of
+\texttt{kernel\_24x6}. The kernel reads and writes its $C$ tile at
+\texttt{C + col*ldC} with aligned loads and stores, but
+$\texttt{ldC}{=}N$, so the address is 64-byte aligned only when $N$ is a
+multiple of eight; every other size faults. The paper's benchmark sizes
+are powers of two and so never trigger it, and no earlier machine in
+this project could execute the code, so the defect had been invisible
+to both the original author and the static and AVX2-port checks of this
+audit. The fix is unaligned loads and stores for the $C$ tile (the
+packed $A$ buffer, which is genuinely aligned, keeps aligned loads); the
+34-case suite (17 sizes from 1 to 517, each for \texttt{matmul} and
+\texttt{strassen}) then passes with zero mismatches. Evidence and diff:
+\texttt{revalidation/correctness/2026-10-13\_avx512\_kernel\_unaligned\_C\_tile.md}.
+It is a direct instance of this section's thesis: a code path that is
+correct only for the sizes its author happened to test.
+
+\paragraph{AVX-512 versus AVX2, $n{=}30$.}
+Using the stronger protocol of Section~\ref{sec:repeated}, each cell is
+30 independent process launches (best of five inner repetitions after a
+warm-up), with AVX-512 and AVX2 launches interleaved in alternating order
+to cancel thermal and background drift, a correctness check inside every
+launch, bootstrap 95\% confidence intervals (10{,}000 resamples), and a
+permutation test with Holm correction across all forty comparisons
+(Table~\ref{tab:avx512}). Threads are unpinned.
+
+\begin{table}[h]
+\centering
+\small
+\caption{AVX-512 versus AVX2 throughput of the audited code on a Core
+i5-1145G7 (WSL2), full grid $N\in\{256,\dots,4096\}$, $T\in\{1,2,4,8\}$,
+$n{=}30$ launches per cell; mean GFLOP/s and the ratio's bootstrap 95\%
+CI. Only $T{=}1$ and $T{=}8$ are shown; all 40 comparisons (every $N$,
+$T$, and algorithm) have Holm-adjusted $p=0.004$ (the smallest value
+10{,}000 permutations can yield, times 40 comparisons). Data:
+\texttt{revalidation/benchmarks/2026-10-19\_ceburu03-11th-Gen-i5-1145G7-avx512-n30-full/n30\_comparison.csv}.}
+\label{tab:avx512}
+\begin{tabular}{llrrrrl}
+\toprule
+Algorithm & $N$ & $T$ & AVX2 & AVX-512 & Ratio & 95\% CI \\
+\midrule
+blocked  &  256 & 1 & 14.6 & 41.6  & 2.85$\times$ & [2.78, 2.94] \\
+blocked  &  256 & 8 & 25.8 & 134.8 & 5.22$\times$ & [4.93, 5.69] \\
+blocked  &  512 & 1 & 20.3 & 43.1  & 2.12$\times$ & [2.10, 2.14] \\
+blocked  &  512 & 8 & 48.0 & 117.4 & 2.45$\times$ & [2.19, 2.69] \\
+blocked  & 1024 & 1 & 20.4 & 43.3  & 2.12$\times$ & [2.09, 2.15] \\
+blocked  & 1024 & 8 & 39.9 & 111.3 & 2.79$\times$ & [2.61, 2.99] \\
+blocked  & 2048 & 1 & 23.3 & 45.9  & 1.97$\times$ & [1.93, 2.00] \\
+blocked  & 2048 & 8 & 53.7 & 102.7 & 1.91$\times$ & [1.90, 1.93] \\
+blocked  & 4096 & 1 & 24.0 & 48.9  & 2.04$\times$ & [2.02, 2.06] \\
+blocked  & 4096 & 8 & 53.3 & 107.1 & 2.01$\times$ & [1.99, 2.03] \\
+Strassen &  256 & 1 & 15.3 & 23.2  & 1.52$\times$ & [1.48, 1.57] \\
+Strassen &  256 & 8 & 50.4 & 67.0  & 1.33$\times$ & [1.16, 1.51] \\
+Strassen &  512 & 1 & 14.2 & 19.2  & 1.35$\times$ & [1.35, 1.36] \\
+Strassen &  512 & 8 & 31.9 & 39.3  & 1.23$\times$ & [1.18, 1.29] \\
+Strassen & 1024 & 1 & 18.4 & 27.3  & 1.48$\times$ & [1.44, 1.52] \\
+Strassen & 1024 & 8 & 35.2 & 40.7  & 1.16$\times$ & [1.12, 1.20] \\
+Strassen & 2048 & 1 & 21.7 & 32.0  & 1.47$\times$ & [1.44, 1.50] \\
+Strassen & 2048 & 8 & 43.7 & 48.6  & 1.11$\times$ & [1.09, 1.13] \\
+Strassen & 4096 & 1 & 23.3 & 33.6  & 1.44$\times$ & [1.43, 1.45] \\
+Strassen & 4096 & 8 & 47.5 & 52.6  & 1.11$\times$ & [1.10, 1.12] \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+AVX-512 is significantly faster in every one of the 40 cells. Blocked
+DGEMM gains 1.85--2.8$\times$ for $N\ge512$ (and up to 5.2$\times$ at
+$N{=}256$ with eight threads, where the AVX2 port is dominated by
+threading overhead); the Strassen path gains only 1.1--1.7$\times$, which is
+consistent with Strassen's memory-bound addition and subtraction phases
+absorbing most of the wider kernel's advantage rather than a property
+of the kernel itself. The limits are material. Thirty-eight of the 80
+(ISA, algorithm, $N$, $T$) groups have a coefficient of variation above
+5\% (up to 30\%, concentrated at $N\le1024$ with four or eight threads;
+all $N{=}4096$ groups are below 3.5\%), reflecting laptop thermals and
+WSL2 scheduling, so the
+intervals are valid within this session on this machine and say nothing
+about between-day or between-machine variation. Absolute throughput is
+low relative to peak and must not be compared with the audited paper's
+dual Xeon Gold 5218. The run used the High-performance power plan on AC
+power. The comparison is between the audited code and its own AVX2 port,
+not between instruction sets in the abstract: this project's separately
+tuned AVX2 DGEMM reaches 93.9~GFLOP/s at $N{=}2048$, $T{=}8$
+(Table~\ref{tab:repro-avx2}), close to the audited AVX-512 kernel's
+102.7, so tuning matters about as much as vector width here. The paper's
+Strassen-versus-blocked crossover claims are not tested, and the blocking
+constants (sized for 32 threads) were not re-tuned for a four-core part.
+
+\paragraph{The project's own AVX2 path at $n{=}30$.}
+The portable harness (\texttt{reproduce.sh --full}) was run on the same
+machine under the same protocol (Table~\ref{tab:repro-avx2}). Correctness
+passed in all 30 launches of every step. The Dumas et al.\ throughput cost
+relative to classical Strassen is 19.3\% here ($N{=}1024$, depth~3), in
+the same direction and close in magnitude to the 20.7\% measured on the
+development machine at $N{=}2048$ (Section~\ref{sec:dumas-perf}); the
+two configurations differ, so this is a consistency check, not a
+replication of the identical cell.
+
+\begin{table}[h]
+\centering
+\small
+\caption{Portable AVX2 path on the Core i5-1145G7 (WSL2), $n{=}30$
+launches per row, mean GFLOP/s with bootstrap 95\% CI. DGEMM: $N{=}2048$;
+Strassen and Dumas: $N{=}1024$, depth~3; $T{=}8$. Data:
+\texttt{results/reproduce\_20261019\_130645/} (raw samples per step).}
+\label{tab:repro-avx2}
+\begin{tabular}{lrl}
+\toprule
+Step & GFLOP/s & 95\% CI \
+\midrule
+Classical DGEMM (\texttt{matmul\_ladder}) & 93.9 & [91.1, 97.3] \
+Classic Strassen & 31.4 & [31.3, 31.5] \
+Dumas et al.\ (2024) & 25.4 & [25.0, 25.6] \
+\texttt{dgemm\_base} (asm kernel) & 83.2 & [82.9, 83.5] \
+\texttt{strassen\_1level} (asm kernel) & 32.1 & [32.0, 32.2] \
+\bottomrule
+\end{tabular}
+\end{table}
 
 %==============================================================
 \section{A Measurement-Bias Case Study: Scheduling Versus Virtualization}
@@ -1147,10 +1295,16 @@ square-power-of-two-only benchmark would ever surface.
 
 We hold ourselves to the same standard of stating limitations plainly
 that motivates Section~\ref{sec:vmcase}: no AVX-512 hardware was
-reachable at any point in this project, so every correctness result in
-Section~\ref{sec:audit} rests on a temporary scalar stand-in kernel plus
-a permanent, execution-verified AVX2 port, not on AVX-512 execution
-itself -- a real limitation, not one we found a way around. No literal
+reachable during the audit proper, so the correctness results of
+Section~\ref{sec:audit} rest on a temporary scalar stand-in kernel plus
+a permanent, execution-verified AVX2 port. Section~\ref{sec:avx512}
+later closes part of that gap by executing the real AVX-512 kernel on
+one laptop-class machine (and immediately found a bug the stand-ins
+could not), but it is a single WSL2 machine with unpinned threads, a
+single-session grid, and noisy cells
+(CV up to 30\%); it is not a Xeon-class AVX-512 server, does not test
+the paper's dual-socket claims, and its confidence intervals do not cover
+between-day variation. No literal
 bare-metal Linux machine was available; native Windows (no
 virtualization layer) is the closest non-Hyper-V substitute reached, and
 Section~\ref{sec:vmcase}'s controlled experiment is confined to that
@@ -1217,8 +1371,13 @@ license (\texttt{LICENSE}), with the curated OpenBLAS/BLIS excerpts in
 terms. A clone-and-run harness (\texttt{reproduce.sh} for Linux/macOS/
 WSL, \texttt{reproduce.ps1} for native Windows) builds and runs the
 portable subset of this paper's claims -- classical-DGEMM correctness
-and performance, both Strassen rebuilds, and the accuracy sweep -- in
-a couple of minutes on any AVX2+FMA+OpenMP machine, writing a
+and performance, both Strassen rebuilds, and the accuracy sweep -- on
+any AVX2+FMA+OpenMP machine (all of it now under the $n{=}30$
+protocol of \texttt{PROTOCOL.md}, with a \texttt{--smoke} mode for a
+quick wiring check; a separate \texttt{avx512/run\_avx512.sh} pipeline
+runs the audited AVX-512 kernel, gates on its correctness suite, and
+writes the Section~\ref{sec:avx512} data, and \texttt{tools/combine\_results.py}
+merges runs from any number of machines), writing a
 machine-identified CSV row (OS, CPU, compiler, core counts,
 correctness pass/fail, headline GFLOP/s) designed so results collected
 from several independent machines concatenate directly into one
@@ -1248,8 +1407,10 @@ wins are real hardware effects, and whether a very recent (2024) result
 in the numerical-accuracy literature could be benchmarked for the first
 time using the same infrastructure. On the first question, we found and
 fixed four real correctness bugs (plus six more in a deeper second
-pass), the most serious silently transposing the product of a
-non-square multiplication. On the second, a large scheduling-policy
+pass, and one further crash found only when the AVX-512 kernel was
+finally executed on real hardware, where it is also measured at
+roughly 2$\times$ over AVX2 for blocked DGEMM), the most serious silently
+transposing the product of a non-square multiplication. On the second, a large scheduling-policy
 performance win did not survive proper repeated measurement, while raw
 core-placement effects did -- a concrete, domain-specific demonstration
 that measurement bias (Mytkowicz et al., 2009) remains a live concern
@@ -1260,7 +1421,9 @@ be the first time under realistic execution, confirming its accuracy
 claim and quantifying, for the first time, the performance cost that
 comes with it.
 
-Concrete next steps, in priority order: cross-machine confirmation of
+Concrete next steps, in priority order: a repeat of
+Section~\ref{sec:avx512} on a Xeon-class AVX-512 server and on a
+different day; cross-machine confirmation of
 Table~\ref{tab:dumas-perf}'s performance-cost figure on \texttt{glogin}
 and native Windows; project-wide adoption of Section~\ref{sec:repeated}'s bootstrap-CI protocol
 beyond Section~\ref{sec:vmcase}; and running the measurement-bias

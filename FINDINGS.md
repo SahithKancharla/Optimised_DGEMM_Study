@@ -2469,3 +2469,68 @@ L.4 set out to produce, and it now exists.
   here is faster to run but weaker evidence than the reps=20-30 +
   bootstrap-CI protocol Part L.3 recommends adopting project-wide before
   writeup.
+
+---
+
+# Part N — First real AVX-512 execution (Tiger Lake, WSL2) under the n=30 protocol
+
+**Date:** 2026-10-13. **Data:** `revalidation/benchmarks/2026-10-13_ceburu03-11th-Gen-i5-1145G7-avx512-n30-focused/`
+(`n30_samples.csv` raw, `n30_summary.csv`, `n30_comparison.csv`, `metadata.txt`). **Protocol:** `PROTOCOL.md`.
+
+**Machine:** 11th Gen Intel i5-1145G7 (4C/8T, AVX-512 F/DQ/BW/VL/VNNI/IFMA...), 16 GB, WSL2 Ubuntu 26.04,
+gcc 15.2.0, `-O3 -march=skylake-avx512 -fopenmp` (AVX2 baseline: `-mavx2 -mfma`). Threads unpinned.
+This corrects the Part A / L.2 statement that no AVX-512 hardware was reachable (for this workstream's
+later work; the earlier parts' data are unchanged).
+
+## N.1 A real bug found by running it
+The audited `kernel.c` crashed (SIGSEGV) for any N not a multiple of 8 -- aligned 512-bit loads/stores on the
+C tile at `C + col*ldC`. Never exercised before because benchmark sizes were powers of two and no AVX-512
+machine had run it. Fixed with `loadu/storeu`; 34 correctness cases then pass.
+Evidence + fix: `revalidation/correctness/2026-10-13_avx512_kernel_unaligned_C_tile.md`.
+
+## N.2 Results (n=30 per cell; mean GFLOP/s, bootstrap 95% CI; focused grid N in {1024,2048}, T in {4,8})
+| algo | N | T | AVX2 | AVX-512 | AVX-512/AVX2 (95% CI) | Holm p |
+|---|---|---|---|---|---|---|
+| blocked | 1024 | 4 | 41.5 | 79.9 | 1.93x [1.81, 2.06] | 0.0008 |
+| blocked | 1024 | 8 | 44.6 | 110.7 | 2.48x [2.32, 2.65] | 0.0008 |
+| blocked | 2048 | 4 | 47.9 | 84.1 | 1.76x [1.71, 1.81] | 0.0008 |
+| blocked | 2048 | 8 | 58.5 | 98.3 | 1.68x [1.63, 1.73] | 0.0008 |
+| strassen | 1024 | 4 | 33.9 | 40.3 | 1.19x [1.12, 1.26] | 0.0008 |
+| strassen | 1024 | 8 | 36.5 | 41.2 | 1.13x [1.07, 1.19] | 0.0008 |
+| strassen | 2048 | 4 | 41.7 | 50.7 | 1.21x [1.18, 1.24] | 0.0008 |
+| strassen | 2048 | 8 | 44.4 | 48.6 | 1.09x [1.07, 1.12] | 0.0008 |
+
+All correctness checks passed in every launch (relerr <= 1e-8 gate).
+
+## N.3 Reading it, and the limits
+- AVX-512 beats AVX2 significantly in all 8 cells (p_holm = 0.0008, the floor for 10,000 permutations). Blocked DGEMM
+  gains 1.7-2.5x; the Strassen path gains only 1.1-1.2x, so the AVX-512 kernel's advantage is largely absorbed by
+  Strassen's memory-bound add/sub phases.
+- Absolute numbers are low versus peak: this is a 4-core laptop part (one 512-bit FMA unit/core, likely
+  downclocking), unpinned threads on WSL2, and the audited blocking (MC/NC/KC sized for 32 threads, static buffers).
+  **Do not compare absolute GFLOP/s with the audited paper's dual Xeon Gold 5218.**
+- 12 of 16 groups have CV > 5% (up to 16%): laptop thermals/WSL2 scheduling. CIs reflect that; they are valid
+  within this session only. A different day or plugged-in/pinned re-run would be needed to claim stability.
+- Scope: only N in {1024, 2048} and T in {4, 8} so far; the full grid (N=256..4096, T=1,2,4,8) is `run_avx512.sh` with
+  default arguments (~5 h). The paper's Strassen-vs-blocked crossover claims are not tested here.
+
+## N.4 Full grid and portable-path results (2026-10-19) — supersedes the focused table above
+
+**Setup:** High-performance power plan, AC power, same machine/toolchain as N.1-N.3. 1,200 launches
+(N=256..4096 x T=1,2,4,8 x 30 x 2 ISAs), AVX-512/AVX2 interleaved. Data:
+`revalidation/benchmarks/2026-10-19_ceburu03-11th-Gen-i5-1145G7-avx512-n30-full/` (`n30_samples.csv` raw,
+`n30_summary.csv`, `n30_comparison.csv`). Correctness passed in every launch.
+
+- All 40 AVX-512-vs-AVX2 comparisons significant (Holm p = 0.004, floor for 10,000 permutations x 40).
+- **Blocked DGEMM:** 1.85-2.8x for N >= 512 (N=4096: 1.97-2.12x, 107.1 vs 53.3 GFLOP/s at T=8, ratio CI [1.99, 2.03]);
+  up to 5.2x at N=256, T=8 (AVX2 port dominated by threading overhead there).
+- **Strassen path:** only 1.11-1.73x (shrinks with threads; 1.11x at N>=2048, T=8).
+- **Noise:** 38 of 80 groups CV > 5% (max ~30%), concentrated at N <= 1024 with 4-8 threads; all N=4096 groups < 3.5%.
+- **Portable AVX2 path (`reproduce.sh --full`, n=30, T=8):** DGEMM N=2048 93.9 [91.1, 97.3]; classic Strassen N=1024/depth 3
+  31.4 [31.3, 31.5]; Dumas 2024 25.4 [25.0, 25.6] (cost 19.3% vs classic Strassen; dev machine: 20.7% at N=2048);
+  asm `dgemm_base` 83.2 [82.9, 83.5], `strassen_1level` 32.1 [32.0, 32.2]. All correctness checks passed 30/30.
+  Data: `results/reproduce_20261019_130645/` (gitignored; copy to a tracked folder if it must be archived).
+- **Caveat worth stating in the paper:** the project's own tuned AVX2 DGEMM (93.9) nearly matches the audited AVX-512
+  kernel (102.7) at N=2048, T=8, and beats the audited code's AVX2 port (53.7): tuning matters about as much as vector
+  width. Tiger Lake fuses its two 256-bit FMA ports for 512-bit ops (my understanding; peak not measured here), so
+  AVX-512's peak-FLOP advantage over AVX2 is small on this chip.

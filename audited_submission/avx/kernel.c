@@ -4,7 +4,7 @@
 /*
  * 24×6 micro‑kernel – AVX‑512 (double)
  * -----------------------------------------------------------
- *   Fast path  : mr == 24  →  aligned loads/stores, no masks
+ *   Fast path  : mr == 24  →  unaligned (loadu/storeu) C-tile loads/stores, no masks
  *   Slow path  : mr <  24  →  masked loads/stores
  *   Branch‑free kc loop chosen with one switch(nr)
  */
@@ -59,9 +59,9 @@ void kernel_24x6(const double *restrict A,
     if (mr == MR) {
         __m512d C0[3], C1[3], C2[3], C3[3], C4[3], C5[3];
 #define LD_FULL(col, dst)                                                       \
-        dst[0] = _mm512_load_pd(C + (size_t)(col) * ldC +  0);                \
-        dst[1] = _mm512_load_pd(C + (size_t)(col) * ldC +  8);                \
-        dst[2] = _mm512_load_pd(C + (size_t)(col) * ldC + 16);
+        dst[0] = _mm512_loadu_pd(C + (size_t)(col) * ldC +  0);                \
+        dst[1] = _mm512_loadu_pd(C + (size_t)(col) * ldC +  8);                \
+        dst[2] = _mm512_loadu_pd(C + (size_t)(col) * ldC + 16);
         switch (nr) {
         default: LD_FULL(5, C5);
         case 5:  LD_FULL(4, C4);
@@ -184,9 +184,9 @@ void kernel_24x6(const double *restrict A,
 #undef FMA_COL
 
 #define ST_FULL(col, src)                                             \
-        _mm512_store_pd(C + (size_t)(col) * ldC +  0, src[0]);      \
-        _mm512_store_pd(C + (size_t)(col) * ldC +  8, src[1]);      \
-        _mm512_store_pd(C + (size_t)(col) * ldC + 16, src[2]);
+        _mm512_storeu_pd(C + (size_t)(col) * ldC +  0, src[0]);      \
+        _mm512_storeu_pd(C + (size_t)(col) * ldC +  8, src[1]);      \
+        _mm512_storeu_pd(C + (size_t)(col) * ldC + 16, src[2]);
         switch (nr) {
         default: ST_FULL(5, C5);
         case 5:  ST_FULL(4, C4);

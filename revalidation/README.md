@@ -120,3 +120,11 @@ way to re-run correctness checks on AVX2-only hardware going forward.
 smaller-than-vector-width N straight into the register-blocked base-case
 kernel. Outside the paper's tested range (N≥64); listed here so it isn't
 rediscovered from scratch.
+
+## AVX-512 / n=30 runs (added 2026-10-13)
+`benchmarks/<date>_<host>-<cpu>-avx512*/` folders come from `avx512/run_avx512.sh` and follow
+`../PROTOCOL.md` (n=30). Besides `metadata.txt`, `avx512.csv`, `avx2.csv` (mean seconds, legacy schema)
+they contain `n30_samples.csv` (one row per process launch), `n30_summary.csv` (mean/CI/CV per cell),
+`n30_comparison.csv` (AVX-512 vs AVX2 ratio, CI, Holm p), `correctness_avx512.txt`, `run_info.csv`.
+Merge any set of machines with `python3 tools/combine_results.py` (-> `results/combined/`).
+Synthesis: `../FINDINGS.md` Part N.

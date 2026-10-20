@@ -95,8 +95,9 @@ or `cd avx && ./run.sh`, `cd Strassen_BreakDown && ./run.sh`,
 `audited_submission/` (not the repo root) as the working directory,
 since `Data/matrix_a.bin`/`matrix_b.bin` are read via a fixed relative
 path. Requires a Linux-like environment with OpenMP; the AVX-512 path
-additionally requires AVX-512 hardware, which no machine used anywhere
-in this project's own work actually has — see `FINDINGS.md` Part A.
+additionally requires AVX-512 hardware. The earlier workstreams had none
+(`FINDINGS.md` Part A); as of 2026-10-13 it has been run on one such machine
+(i5-1145G7, Tiger Lake) — see `FINDINGS.md` Part N and `avx512/README.md`.
 
 ## How to run this project's own work
 

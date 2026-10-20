@@ -134,3 +134,23 @@ produced this number" for anything not listed above.
   above a small number of times, per that protocol, before trusting a
   single run is part of using this repository correctly, not optional
   polish.
+
+## Update 2026-10-13: AVX-512 pipeline and the n=30 standard
+
+- **Protocol:** every run now follows [`PROTOCOL.md`](PROTOCOL.md) -- n=30
+  independent process launches per measured point (`reproduce.sh --runs`,
+  `reproduce.ps1 -Runs`, default 30; `--smoke` = n=3, wiring check only),
+  bootstrap 95% CIs, Holm-corrected tests. The earlier "best-of-N, directional"
+  numbers elsewhere in this repo predate it.
+- **AVX-512 now runs:** `bash avx512/run_avx512.sh` (or `reproduce.ps1 -Avx512`)
+  builds the audited AVX-512 kernel, gates on `test_local.c`, benchmarks AVX-512
+  vs AVX2 on the same machine, and writes
+  `revalidation/benchmarks/<date>_<host>-<cpu>-avx512*/`. First data:
+  `2026-10-13_ceburu03-11th-Gen-i5-1145G7-avx512-n30-focused/` (FINDINGS Part N).
+- **Cross-machine table:** `python3 tools/combine_results.py [--extra DIR ...]`
+  -> `results/combined/` (long CSV, best-by-machine, run_info, optional .xlsx).
+- Adds a machine: i5-1145G7 (Tiger Lake, 4C/8T, 16 GB, WSL2 Ubuntu 26.04, gcc 15.2).
+- **Full-grid n=30 data (2026-10-19):** `revalidation/benchmarks/2026-10-19_ceburu03-11th-Gen-i5-1145G7-avx512-n30-full/`
+  and `results/reproduce_20261019_130645/`, produced by `bash run_full_suite.sh` (sequential: AVX-512 grid, then
+  `reproduce.sh --full`, then merge; ~3.7 h on the i5-1145G7). Shell scripts must keep LF line endings
+  (`.gitattributes` enforces this); CRLF breaks them under WSL.

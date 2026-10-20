@@ -7,7 +7,8 @@
 #
 # Usage: powershell -ExecutionPolicy Bypass -File .\reproduce.ps1 [-Full]
 
-param([switch]$Full)
+param([switch]$Full, [switch]$Avx512, [int]$Runs = 30, [switch]$Smoke)
+if ($Smoke) { $Runs = 3 }   # wiring check only, NOT publication-grade
 
 $ErrorActionPreference = "Stop"
 Set-Location -Path $PSScriptRoot
@@ -42,6 +43,12 @@ if ($wslAvailable) {
     $linuxPath = "/mnt/$drive$rest"
     $fullArg = ""
     if ($Full) { $fullArg = "--full" }
+    $fullArg = "$fullArg --runs $Runs"
+    if ($Avx512) {
+        Write-Host "AVX-512 pipeline: bash ./avx512/run_avx512.sh $fullArg"
+        & wsl.exe bash -lc "cd '$linuxPath' && bash ./avx512/run_avx512.sh $fullArg"
+        exit $LASTEXITCODE
+    }
     Write-Host "Running: wsl bash -lc `"cd '$linuxPath' && bash ./reproduce.sh $fullArg`""
     & wsl.exe bash -lc "cd '$linuxPath' && bash ./reproduce.sh $fullArg"
     exit $LASTEXITCODE
@@ -152,12 +159,30 @@ $N = if ($Full) { 2048 } else { 1024 }
 $reps = if ($Full) { 10 } else { 5 }
 
 Write-Section "1/3 Classical DGEMM: correctness + performance (matmul_ladder.c)"
-$line = & "$out\bin\matmul_ladder.exe" full $N $T guided 0 $reps
-$line | Tee-Object -FilePath "$out\matmul_ladder.csv"
-$fields = $line -split ","
-$relerr = $fields[-1]
-$gflops = $fields[-2]
-Write-Host "  N=$N T=$T  ->  relative error: $relerr   GFLOP/s: $gflops"
+# Project standard (PROTOCOL.md): n=$Runs independent process launches.
+$samples = @()
+for ($r = 1; $r -le $Runs; $r++) {
+    $line = & "$out\bin\matmul_ladder.exe" full $N $T guided 0 $reps
+    $f = $line -split ","
+    $samples += [pscustomobject]@{ run = $r; gflops = [double]$f[-2]; relerr = [double]$f[-1] }
+}
+$samples | Export-Csv -NoTypeInformation -Path "$out\matmul_ladder_samples.csv"
+$vals = [double[]]$samples.gflops
+$mean = ($vals | Measure-Object -Average).Average
+$sd = if ($vals.Count -gt 1) { [Math]::Sqrt((($vals | ForEach-Object { ($_ - $mean) * ($_ - $mean) }) | Measure-Object -Sum).Sum / ($vals.Count - 1)) } else { 0 }
+$rng = New-Object System.Random 12345
+$boot = New-Object 'System.Collections.Generic.List[double]'
+for ($b = 0; $b -lt 10000; $b++) {
+    $s = 0.0
+    for ($i = 0; $i -lt $vals.Count; $i++) { $s += $vals[$rng.Next($vals.Count)] }
+    $boot.Add($s / $vals.Count)
+}
+$boot.Sort()
+$ciLo = [Math]::Round($boot[249], 3); $ciHi = [Math]::Round($boot[9749], 3)
+$gflops = [Math]::Round($mean, 3)
+$relerr = ($samples.relerr | Measure-Object -Maximum).Maximum
+$cv = [Math]::Round(100 * $sd / $mean, 2)
+Write-Host "  N=$N T=$T  n=$Runs  GFLOP/s: $gflops [95% CI $ciLo, $ciHi] CV $cv%   worst relerr: $relerr"
 
 Write-Section "2/3 P-core/E-core classification (classify_cores_native.c) -- the exact tool paper Section 3.1 quotes"
 Write-Host "Per-logical-CPU sustained FMA throughput (heterogeneous CPUs show a"
@@ -184,7 +209,7 @@ Write-Host "Classical DGEMM: relerr=$relerr   GFLOP/s=$gflops"
 Write-Host "Core classification and aggregate peak GFLOP/s: see tables above / CSVs."
 
 $header = "timestamp,hostname,os,kernel,cpu_model,physical_cores,logical_cores,ram_gb,compiler,compiler_version,git_commit,git_status,mode,dgemm_N,dgemm_T,dgemm_gflops,dgemm_relerr,strassen_gflops,strassen_relerr,strassen_pass,dumas_gflops,dumas_relerr,dumas_pass,dumas_cost_pct"
-$mode = if ($Full) { 'full' } else { 'quick' }
+$mode = "$(if ($Full) { 'full' } else { 'quick' })-n$Runs"
 $row = "$ts,$env:COMPUTERNAME,`"$osName`",n/a,`"$cpuModel`",$physCores,$([Environment]::ProcessorCount),$ramGb,cl.exe,`"$clVersionLine`",$gitCommit,$gitStatus,$mode,$N,$T,$gflops,$relerr,n/a,n/a,n/a,n/a,n/a,n/a,n/a"
 "$header`n$row" | Tee-Object -FilePath "$out\run_info.csv" | Out-Null
 if (-not (Test-Path "results\run_log.csv")) { $header | Out-File -FilePath "results\run_log.csv" -Encoding utf8 }

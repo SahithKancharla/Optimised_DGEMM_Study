@@ -76,3 +76,10 @@ curl -L -o tectonic.tar.gz \
 tar xzf tectonic.tar.gz
 ./tectonic main.tex
 ```
+
+**Updated 2026-10-19 (full-grid n=30 AVX-512 + portable AVX2 results; earlier 2026-10-13 edits retained):** added §4.x "First Execution on Real AVX-512
+Hardware" (`\label{sec:avx512}`, Table `tab:avx512`) plus matching edits to the abstract,
+contributions, §3.1 environments (third machine), §4 intro, §9 threats, §10 conclusion and
+the artifact paragraph. **Not recompiled** — no LaTeX toolchain was available when these
+edits were made; run `tectonic main.tex` (see above) and check for errors/overfull boxes
+before relying on `main.pdf`, which is still the pre-edit preview.

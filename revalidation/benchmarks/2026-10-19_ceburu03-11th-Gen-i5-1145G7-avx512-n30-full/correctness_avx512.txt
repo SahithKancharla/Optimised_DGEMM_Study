@@ -1,0 +1,35 @@
+N=1      mismatches=0/1 maxdiff=0  PASS
+N=2      mismatches=0/4 maxdiff=0  PASS
+N=5      mismatches=0/25 maxdiff=0  PASS
+N=17     mismatches=0/289 maxdiff=0  PASS
+N=23     mismatches=0/529 maxdiff=0  PASS
+N=24     mismatches=0/576 maxdiff=0  PASS
+N=25     mismatches=0/625 maxdiff=0  PASS
+N=29     mismatches=0/841 maxdiff=0  PASS
+N=47     mismatches=0/2209 maxdiff=0  PASS
+N=48     mismatches=0/2304 maxdiff=0  PASS
+N=49     mismatches=0/2401 maxdiff=0  PASS
+N=100    mismatches=0/10000 maxdiff=0  PASS
+N=127    mismatches=0/16129 maxdiff=0  PASS
+N=128    mismatches=0/16384 maxdiff=0  PASS
+N=129    mismatches=0/16641 maxdiff=0  PASS
+N=250    mismatches=0/62500 maxdiff=0  PASS
+N=517    mismatches=0/267289 maxdiff=0  PASS
+strassen N=1      mismatches=0/1 maxdiff=0  PASS
+strassen N=2      mismatches=0/4 maxdiff=0  PASS
+strassen N=5      mismatches=0/25 maxdiff=0  PASS
+strassen N=17     mismatches=0/289 maxdiff=0  PASS
+strassen N=23     mismatches=0/529 maxdiff=0  PASS
+strassen N=24     mismatches=0/576 maxdiff=0  PASS
+strassen N=25     mismatches=0/625 maxdiff=0  PASS
+strassen N=29     mismatches=0/841 maxdiff=0  PASS
+strassen N=47     mismatches=0/2209 maxdiff=0  PASS
+strassen N=48     mismatches=0/2304 maxdiff=0  PASS
+strassen N=49     mismatches=0/2401 maxdiff=0  PASS
+strassen N=100    mismatches=0/10000 maxdiff=0  PASS
+strassen N=127    mismatches=0/16129 maxdiff=0  PASS
+strassen N=128    mismatches=0/16384 maxdiff=0  PASS
+strassen N=129    mismatches=0/16641 maxdiff=0  PASS
+strassen N=250    mismatches=0/62500 maxdiff=0  PASS
+strassen N=517    mismatches=0/267289 maxdiff=0  PASS
+ALL PASS

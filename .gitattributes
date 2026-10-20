@@ -1,0 +1,2 @@
+# Shell scripts must stay LF: Windows CRLF breaks them under WSL/bash.
+*.sh text eol=lf

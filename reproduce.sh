@@ -4,7 +4,7 @@
 # Dumas et al. 2024 Strassen (Part M), accuracy sweep (Part I/J.8/M.4).
 # See REPRODUCIBILITY.md for scope/limits.
 #
-# Usage: ./reproduce.sh [--full]   (no args = quick, ~1-2 min)
+# Usage: ./reproduce.sh [--full] [--runs 30] [--smoke]   (default n=30 per PROTOCOL.md)
 # Needs gcc (`apt install build-essential`). No WSL/gcc on Windows:
 # use reproduce.ps1 instead (narrower coverage, see its header).
 
@@ -13,7 +13,17 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
 MODE="quick"
-[ "${1:-}" = "--full" ] && MODE="full"
+RUNS=30   # project standard (PROTOCOL.md): n=30 independent process launches per measurement
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --full) MODE="full" ;;
+    --runs) RUNS="$2"; shift ;;
+    --smoke) RUNS=3 ;;   # wiring check only -- NOT publication-grade
+    *) echo "unknown option: $1" >&2; exit 2 ;;
+  esac
+  shift
+done
+command -v python3 >/dev/null 2>&1 || { echo "ERROR: python3 needed for the n=$RUNS statistics (sudo apt install python3)"; exit 1; }
 
 TS=$(date +%Y%m%d_%H%M%S)
 OUT="results/reproduce_${TS}"
@@ -147,40 +157,53 @@ run_step () {
 
 # ---------------------------------------------------------------------
 run_step "1/4 Classical DGEMM: correctness + performance (matmul_ladder.c)"
-LINE=$("$OUT/bin/matmul_ladder" full "$DGEMM_N" "$T" guided 0 "$DGEMM_REPS")
-echo "$LINE" | tee "$OUT/matmul_ladder.csv"
-DGEMM_RELERR=$(echo "$LINE" | awk -F, '{print $NF}')
-DGEMM_GFLOPS=$(echo "$LINE" | awk -F, '{print $(NF-1)}')
-echo "  N=$DGEMM_N T=$T  ->  relative error: $DGEMM_RELERR   GFLOP/s: $DGEMM_GFLOPS"
+echo "run,gflops,relerr" > "$OUT/matmul_ladder_samples.csv"
+for ((r = 1; r <= RUNS; r++)); do
+  LINE=$("$OUT/bin/matmul_ladder" full "$DGEMM_N" "$T" guided 0 "$DGEMM_REPS")
+  echo "$LINE" > "$OUT/matmul_ladder.csv"   # last raw line kept for reference
+  echo "$r,$(echo "$LINE" | awk -F, '{print $(NF-1)","$NF}')" >> "$OUT/matmul_ladder_samples.csv"
+done
+read -r DGEMM_GFLOPS DGEMM_LO DGEMM_HI DGEMM_CV _ DGEMM_RELERR < <(python3 tools/sample_stats.py "$OUT/matmul_ladder_samples.csv" gflops relerr)
+echo "  N=$DGEMM_N T=$T  n=$RUNS  GFLOP/s: $DGEMM_GFLOPS [95% CI $DGEMM_LO, $DGEMM_HI] CV ${DGEMM_CV}%   worst relerr: $DGEMM_RELERR"
 
 # ---------------------------------------------------------------------
 run_step "2/4 Classic Strassen rebuild: correctness + performance (strassen_main.c, Part H/J.7)"
-set +e
-LINE=$("$OUT/bin/strassen_main" "$STRASSEN_N" "$STRASSEN_CUTOFF" "$STRASSEN_DEPTH" "$T" "$STRASSEN_REPS" "$STRASSEN_KC" "$STRASSEN_MC" "$STRASSEN_NC")
-STRASSEN_RC=$?
-set -e
-echo "$LINE" | tee "$OUT/strassen.csv"
-STRASSEN_GFLOPS=$(echo "$LINE" | awk -F, '{print $(NF-3)}')
-STRASSEN_RELERR=$(echo "$LINE" | awk -F, '{print $(NF-2)}')
+STRASSEN_RC=0
+echo "run,gflops,relerr" > "$OUT/strassen_samples.csv"
+for ((r = 1; r <= RUNS; r++)); do
+  set +e
+  LINE=$("$OUT/bin/strassen_main" "$STRASSEN_N" "$STRASSEN_CUTOFF" "$STRASSEN_DEPTH" "$T" "$STRASSEN_REPS" "$STRASSEN_KC" "$STRASSEN_MC" "$STRASSEN_NC")
+  RC=$?
+  set -e
+  [ $RC -ne 0 ] && STRASSEN_RC=$RC
+  echo "$LINE" > "$OUT/strassen.csv"
+  echo "$r,$(echo "$LINE" | awk -F, '{print $(NF-3)","$(NF-2)}')" >> "$OUT/strassen_samples.csv"
+done
+read -r STRASSEN_GFLOPS STRASSEN_LO STRASSEN_HI STRASSEN_CV _ STRASSEN_RELERR < <(python3 tools/sample_stats.py "$OUT/strassen_samples.csv" gflops relerr)
 if [ $STRASSEN_RC -eq 0 ]; then
-  echo "  correctness: PASS (relerr=$STRASSEN_RELERR)   GFLOP/s: $STRASSEN_GFLOPS"
+  echo "  correctness: PASS in all $RUNS runs (worst relerr=$STRASSEN_RELERR)   GFLOP/s: $STRASSEN_GFLOPS [95% CI $STRASSEN_LO, $STRASSEN_HI] CV ${STRASSEN_CV}%"
 else
-  echo "  correctness: FAIL (relerr=$STRASSEN_RELERR exceeds 1e-6) -- see FINDINGS.md Part H.2"
+  echo "  correctness: FAIL in >=1 of $RUNS runs (worst relerr=$STRASSEN_RELERR exceeds 1e-6) -- see FINDINGS.md Part H.2"
 fi
 
 # ---------------------------------------------------------------------
 run_step "3/4 Dumas et al. (2024) alternate-basis Strassen: correctness + performance (dumas_main.c, Part M)"
-set +e
-LINE=$("$OUT/bin/dumas_main" "$STRASSEN_N" "$STRASSEN_CUTOFF" "$STRASSEN_DEPTH" "$T" "$STRASSEN_REPS" "$STRASSEN_KC" "$STRASSEN_MC" "$STRASSEN_NC")
-DUMAS_RC=$?
-set -e
-echo "$LINE" | tee "$OUT/dumas.csv"
-DUMAS_GFLOPS=$(echo "$LINE" | awk -F, '{print $(NF-3)}')
-DUMAS_RELERR=$(echo "$LINE" | awk -F, '{print $(NF-2)}')
+DUMAS_RC=0
+echo "run,gflops,relerr" > "$OUT/dumas_samples.csv"
+for ((r = 1; r <= RUNS; r++)); do
+  set +e
+  LINE=$("$OUT/bin/dumas_main" "$STRASSEN_N" "$STRASSEN_CUTOFF" "$STRASSEN_DEPTH" "$T" "$STRASSEN_REPS" "$STRASSEN_KC" "$STRASSEN_MC" "$STRASSEN_NC")
+  RC=$?
+  set -e
+  [ $RC -ne 0 ] && DUMAS_RC=$RC
+  echo "$LINE" > "$OUT/dumas.csv"
+  echo "$r,$(echo "$LINE" | awk -F, '{print $(NF-3)","$(NF-2)}')" >> "$OUT/dumas_samples.csv"
+done
+read -r DUMAS_GFLOPS DUMAS_LO DUMAS_HI DUMAS_CV _ DUMAS_RELERR < <(python3 tools/sample_stats.py "$OUT/dumas_samples.csv" gflops relerr)
 if [ $DUMAS_RC -eq 0 ]; then
-  echo "  correctness: PASS (relerr=$DUMAS_RELERR)   GFLOP/s: $DUMAS_GFLOPS"
+  echo "  correctness: PASS in all $RUNS runs (worst relerr=$DUMAS_RELERR)   GFLOP/s: $DUMAS_GFLOPS [95% CI $DUMAS_LO, $DUMAS_HI] CV ${DUMAS_CV}%"
 else
-  echo "  correctness: FAIL (relerr=$DUMAS_RELERR exceeds 1e-6) -- see FINDINGS.md Part M.1"
+  echo "  correctness: FAIL in >=1 of $RUNS runs (worst relerr=$DUMAS_RELERR exceeds 1e-6) -- see FINDINGS.md Part M.1"
 fi
 
 # ---------------------------------------------------------------------
@@ -189,7 +212,13 @@ run_step "4/5 Numerical accuracy sweep, 5 distributions x {plain,Strassen depth1
 
 # ---------------------------------------------------------------------
 run_step "5/5 Best-known kernel: dgemm_base + strassen_1level/2level (bench_strassen.c)"
-OMP_NUM_THREADS="$T" "$OUT/bin/bench_strassen" "$DGEMM_N" "$DGEMM_REPS" 42 1 | tee "$OUT/bench_strassen.csv"
+echo "run,gflops" > "$OUT/bs_dgemm_samples.csv"; echo "run,gflops" > "$OUT/bs_s1_samples.csv"
+for ((r = 1; r <= RUNS; r++)); do
+  OMP_NUM_THREADS="$T" "$OUT/bin/bench_strassen" "$DGEMM_N" "$DGEMM_REPS" 42 1 > "$OUT/bench_strassen.csv"
+  awk -F, -v r="$r" '$1=="dgemm_base"{print r","$5}' "$OUT/bench_strassen.csv" >> "$OUT/bs_dgemm_samples.csv"
+  awk -F, -v r="$r" '$1=="strassen_1level"{print r","$5}' "$OUT/bench_strassen.csv" >> "$OUT/bs_s1_samples.csv"
+done
+cat "$OUT/bench_strassen.csv"   # last of $RUNS raw outputs; the n=$RUNS stats are in the summary
 
 # ---------------------------------------------------------------------
 echo
@@ -199,9 +228,9 @@ echo "================================================================"
 echo "Classical DGEMM   : relerr=$DGEMM_RELERR   GFLOP/s=$DGEMM_GFLOPS"
 echo "Classic Strassen  : relerr=$STRASSEN_RELERR   GFLOP/s=$STRASSEN_GFLOPS   $([ $STRASSEN_RC -eq 0 ] && echo PASS || echo FAIL)"
 echo "Dumas (2024)      : relerr=$DUMAS_RELERR   GFLOP/s=$DUMAS_GFLOPS   $([ $DUMAS_RC -eq 0 ] && echo PASS || echo FAIL)"
-BS_DGEMM_GFLOPS=$(awk -F, '$1=="dgemm_base"{print $5}' "$OUT/bench_strassen.csv")
-BS_S1_GFLOPS=$(awk -F, '$1=="strassen_1level"{print $5}' "$OUT/bench_strassen.csv")
-echo "Best-known kernel : dgemm_base=${BS_DGEMM_GFLOPS} GFLOP/s   strassen_1level=${BS_S1_GFLOPS} GFLOP/s"
+read -r BS_DGEMM_GFLOPS BS_D_LO BS_D_HI _ < <(python3 tools/sample_stats.py "$OUT/bs_dgemm_samples.csv" gflops)
+read -r BS_S1_GFLOPS BS_S_LO BS_S_HI _ < <(python3 tools/sample_stats.py "$OUT/bs_s1_samples.csv" gflops)
+echo "Best-known kernel : dgemm_base=${BS_DGEMM_GFLOPS} GFLOP/s [${BS_D_LO}, ${BS_D_HI}]   strassen_1level=${BS_S1_GFLOPS} GFLOP/s [${BS_S_LO}, ${BS_S_HI}]   (n=$RUNS, mean + 95% CI)"
 if command -v awk >/dev/null 2>&1 && [ "$STRASSEN_RC" -eq 0 ] && [ "$DUMAS_RC" -eq 0 ]; then
   COST=$(awk -v s="$STRASSEN_GFLOPS" -v d="$DUMAS_GFLOPS" 'BEGIN{ if (s>0) printf "%.1f", (1-d/s)*100; else print "n/a" }')
   echo
@@ -216,9 +245,13 @@ echo
 
 # Comparison-ready row: collect $OUT/run_info.csv from every machine you
 # run this on and concatenate them (same header) into one table.
-RUN_INFO_HEADER="timestamp,hostname,os,kernel,cpu_model,physical_cores,logical_cores,ram_gb,compiler,compiler_version,git_commit,git_status,mode,dgemm_N,dgemm_T,dgemm_gflops,dgemm_relerr,strassen_gflops,strassen_relerr,strassen_pass,dumas_gflops,dumas_relerr,dumas_pass,dumas_cost_pct"
-RUN_INFO_ROW="$TS,$HOSTNAME_V,\"$OS_NAME\",$KERNEL_V,\"$CPU_MODEL\",$PHYS_CORES,$NPROC,$RAM_GB,$CC,\"$COMPILER_V\",$GIT_COMMIT,$GIT_DIRTY,$MODE,$DGEMM_N,$T,$DGEMM_GFLOPS,$DGEMM_RELERR,$STRASSEN_GFLOPS,$STRASSEN_RELERR,$([ $STRASSEN_RC -eq 0 ] && echo pass || echo fail),$DUMAS_GFLOPS,$DUMAS_RELERR,$([ $DUMAS_RC -eq 0 ] && echo pass || echo fail),$COST"
+RUN_INFO_HEADER="timestamp,hostname,os,kernel,cpu_model,physical_cores,logical_cores,ram_gb,compiler,compiler_version,git_commit,git_status,mode,dgemm_N,dgemm_T,dgemm_gflops,dgemm_relerr,strassen_gflops,strassen_relerr,strassen_pass,dumas_gflops,dumas_relerr,dumas_pass,dumas_cost_pct,runs_per_point,dgemm_ci95_lo,dgemm_ci95_hi,dgemm_cv_pct,strassen_ci95_lo,strassen_ci95_hi,dumas_ci95_lo,dumas_ci95_hi"
+RUN_INFO_ROW="$TS,$HOSTNAME_V,\"$OS_NAME\",$KERNEL_V,\"$CPU_MODEL\",$PHYS_CORES,$NPROC,$RAM_GB,$CC,\"$COMPILER_V\",$GIT_COMMIT,$GIT_DIRTY,$MODE,$DGEMM_N,$T,$DGEMM_GFLOPS,$DGEMM_RELERR,$STRASSEN_GFLOPS,$STRASSEN_RELERR,$([ $STRASSEN_RC -eq 0 ] && echo pass || echo fail),$DUMAS_GFLOPS,$DUMAS_RELERR,$([ $DUMAS_RC -eq 0 ] && echo pass || echo fail),$COST,$RUNS,$DGEMM_LO,$DGEMM_HI,$DGEMM_CV,$STRASSEN_LO,$STRASSEN_HI,$DUMAS_LO,$DUMAS_HI"
 { echo "$RUN_INFO_HEADER"; echo "$RUN_INFO_ROW"; } | tee "$OUT/run_info.csv" > /dev/null
+# header grew (n=30 columns appended): don't mix with an older-format log
+if [ -f results/run_log.csv ] && [ "$(head -1 results/run_log.csv)" != "$RUN_INFO_HEADER" ]; then
+  mv results/run_log.csv "results/run_log_pre_n30_$TS.csv"
+fi
 [ -f results/run_log.csv ] || echo "$RUN_INFO_HEADER" > results/run_log.csv
 echo "$RUN_INFO_ROW" >> results/run_log.csv
 echo "Run info: $OUT/run_info.csv (also appended to results/run_log.csv)"
@@ -227,8 +260,8 @@ echo "What this script does NOT reproduce (by design -- see REPRODUCIBILITY.md):
 echo "  - the full statistical-rigor (n=4-5+ repeat) scheduling/placement"
 echo "    experiment behind paper Section 5 (needs Windows thread pinning"
 echo "    -- see src/avx2/ladder/pinning_experiment.csv and reproduce.ps1)"
-echo "  - the original paper's AVX-512 kernel (no AVX-512 hardware is"
-echo "    assumed reachable; this project never ran one either)"
+echo "  - the original paper's AVX-512 kernel (separate pipeline: bash avx512/run_avx512.sh,"
+echo "    or reproduce.ps1 -Avx512; needs a CPU with avx512f -- see avx512/README.md)"
 echo "  - production-BLAS baseline comparisons (needs OpenBLAS/BLIS/MKL"
 echo "    installed separately -- see src/baselines/build.sh)"
 echo "  - the full multi-hour N/thread-count sweeps behind every table"

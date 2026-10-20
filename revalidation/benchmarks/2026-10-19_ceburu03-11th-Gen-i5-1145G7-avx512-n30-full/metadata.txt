@@ -1,0 +1,19 @@
+run_date: 2026-10-19 (20261019_100154)
+repo_commit: a08f655 (dirty (local edits present))
+host: ceburu03  (Ubuntu 26.04.1 LTS [WSL2], kernel 6.18.54.1-microsoft-standard-WSL2)
+cpu: 11th Gen Intel(R) Core(TM) i5-1145G7 @ 2.60GHz
+cores: 4 physical / 8 logical, 8 GB RAM
+isa_available: avx512_bitalg avx512_vbmi2 avx512_vnni avx512_vp2intersect avx512_vpopcntdq avx512bw avx512cd avx512dq avx512f avx512ifma avx512vbmi avx512vl 
+compiler: gcc (Ubuntu 15.2.0-16ubuntu1) 15.2.0
+build_flags_avx512: -O3 -fno-math-errno -march=skylake-avx512 -fopenmp
+build_flags_avx2: -O3 -fno-math-errno -mavx2 -mfma -fopenmp
+driver: bench_avx512.c (same driver for both ISAs; Freivalds correctness check in every launch)
+protocol: n30 -- 30 independent process launches per (N,T) point, each = best of 5 inner reps after 1 warm-up; ISA order alternated per launch (PROTOCOL.md)
+sizes_tested: 256,512,1024,2048,4096
+threads_tested: 1,2,4,8
+total_launches: 1200
+correctness_suite: PASS  (test_local.c against kernel.c, see correctness_avx512.txt)
+statistics: tools/analyze_n30.py -- bootstrap 95% CI (10000 resamples, seed 12345), permutation test, Holm correction
+caveats: laptop/VM runs throttle -- plug in, high-performance power mode, close other apps (CV>5% points are flagged).
+  WSL2/VM timers and core scheduling add noise (FINDINGS.md Part A). Threads are not pinned (OS scheduler decides).
+  Not the audited paper's machine (dual Xeon Gold 5218) -- absolute GFLOP/s will differ.
