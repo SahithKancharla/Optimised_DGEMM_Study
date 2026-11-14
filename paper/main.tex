@@ -15,10 +15,9 @@
 % zero local setup there. Verified to compile clean (zero LaTeX
 % errors, zero unresolved refs/citations) via a standalone `tectonic`
 % binary -- see paper/README.md. The ACM metadata placeholders below
-% (volume/number/DOI, CCS concept codes) are still best-effort --
-% re-verify those specifically on Overleaf/ACM's CCS tool before
-% submitting; they're metadata, not something a compile check can
-% validate. TOMS's own
+% (volume/number/DOI) are assigned by ACM at acceptance, not before;
+% the CCS concept codes have been live-verified against dl.acm.org/ccs
+% (2026-10-20). TOMS's own
 % "Information for Authors" guidance (fetched 2026-10-12, via an
 % unofficial but detailed mirror -- re-check the live Manuscript
 % Central portal before submitting) drove several concrete choices
@@ -60,6 +59,7 @@
   of a Dense Matrix Multiplication and Strassen Implementation}
 
 \author{Sahith Kancharla}
+\orcid{0009-0005-9605-1252}
 \affiliation{%
   \institution{Virginia Tech, Department of Computer Science}
   \country{USA}
@@ -76,22 +76,22 @@
 A prior, unpublished AVX-512 dense-matrix-multiplication (DGEMM) and
 Strassen implementation is audited for three questions: whether
 it does what it claims, whether its performance wins reflect real
-hardware effects rather than measurement artifacts, and whether its
-numerical-accuracy discussion can be extended with a current
-literature result not yet benchmarked anywhere. A correctness audit
+hardware effects, not measurement artifacts, and whether its
+numerical-accuracy discussion extends to a current literature result
+never benchmarked. A correctness audit
 finds and fixes four real, execution-verified bugs, the most serious a
-packing error that silently computes the product in the wrong order
+packing error silently computing the product in the wrong order
 for non-square shapes; first execution on real AVX-512 hardware exposes
-a fifth, an alignment crash, and measures roughly 2$\times$
+a fifth, an alignment crash, and measures 2$\times$
 blocked-DGEMM gains over AVX2. A large, roughly two-times OpenMP
 dynamic-scheduling performance win, first measured under
-virtualization, is shown through controlled, repeated measurement --
+virtualization, does not survive controlled, repeated measurement --
 including the heterogeneous performance/efficiency-core case
-scheduling theory favors most -- not to reproduce; only core placement
-survives repetition. A 2024 accuracy-optimized alternate-basis Strassen
+scheduling theory favors most; only core placement does. A 2024
+accuracy-optimized alternate-basis Strassen
 variant is implemented as a real recursive block algorithm, its
 formula symbolically verified against the source paper's straight-line
-program first, catching a transcription error. Measured under
+program, catching a transcription error. Measured under
 realistic packed, blocked, multi-threaded execution for what appears
 to be the first time, it shows consistently lower error than classical
 Strassen at matched recursion depth, at a measurable throughput cost
@@ -102,35 +102,47 @@ reproducible harness and dataset.
 \begin{CCSXML}
 <ccs2012>
 <concept>
-<concept_id>10002950.10003705.10003707</concept_id>
-<concept_desc>Mathematics of computing~Mathematical software</concept_desc>
+<concept_id>10002950.10003705.10011686</concept_id>
+<concept_desc>Mathematics of computing~Mathematical software performance</concept_desc>
 <concept_significance>500</concept_significance>
 </concept>
 <concept>
-<concept_id>10010147.10010169.10010170</concept_id>
+<concept_id>10010147.10010169.10010170.10010171</concept_id>
 <concept_desc>Computing methodologies~Shared memory algorithms</concept_desc>
 <concept_significance>500</concept_significance>
 </concept>
 <concept>
-<concept_id>10011007.10011006.10011066</concept_id>
+<concept_id>10010147.10010148.10010149.10010158</concept_id>
+<concept_desc>Computing methodologies~Linear algebra algorithms</concept_desc>
+<concept_significance>300</concept_significance>
+</concept>
+<concept>
+<concept_id>10011007.10010940.10011003.10011002</concept_id>
 <concept_desc>Software and its engineering~Software performance</concept_desc>
 <concept_significance>300</concept_significance>
 </concept>
 <concept>
-<concept_id>10002944.10011123.10011131</concept_id>
+<concept_id>10002944.10011123.10010912</concept_id>
 <concept_desc>General and reference~Empirical studies</concept_desc>
 <concept_significance>300</concept_significance>
 </concept>
+<concept>
+<concept_id>10010147.10010169.10010170</concept_id>
+<concept_desc>Computing methodologies~Parallel algorithms</concept_desc>
+<concept_significance>100</concept_significance>
+</concept>
 </ccs2012>
 \end{CCSXML}
-% CCS concept IDs above are best-effort, not re-verified against
-% ACM's live classification tool (dl.acm.org/ccs) -- regenerate there
-% before final submission; only the displayed \ccsdesc text below
-% actually appears in the typeset paper.
-\ccsdesc[500]{Mathematics of computing~Mathematical software}
+% All six CCS concept IDs below are re-verified against a live
+% dl.acm.org/ccs pull (2026-10-20), including Software performance's,
+% the last holdout. Only the displayed \ccsdesc text below actually
+% appears in the typeset paper.
+\ccsdesc[500]{Mathematics of computing~Mathematical software performance}
 \ccsdesc[500]{Computing methodologies~Shared memory algorithms}
+\ccsdesc[300]{Computing methodologies~Linear algebra algorithms}
 \ccsdesc[300]{Software and its engineering~Software performance}
 \ccsdesc[300]{General and reference~Empirical studies}
+\ccsdesc[100]{Computing methodologies~Parallel algorithms}
 
 \keywords{dense matrix multiplication, Strassen's algorithm,
   measurement bias, reproducibility, OpenMP scheduling, numerical
@@ -151,44 +163,39 @@ packing model~\cite{goto2008anatomy}, generalized into the portable BLIS
 framework~\cite{vanzee2016blis}, and Huang et al.'s demonstration that
 Strassen's extra additions can be fused into an already-optimized
 DGEMM's packing routines at essentially no extra workspace
-cost~\cite{huang2016strassen}. Adversarial re-execution -- taking a
-specific implementation, running it, and checking whether it actually
-does what its own writeup claims -- is a useful check regardless of who
-wrote the original code, including the same author. This project
-started as exactly that exercise, applied to the author's own earlier,
-unpublished AVX-512 DGEMM/Strassen implementation (an undergraduate
-course project, never submitted or peer-reviewed anywhere) against its
-own accompanying writeup -- and the audit surfaced real bugs (Section
-\ref{sec:audit}), which is itself evidence that this kind of check is
-worth doing routinely, not just once and not just by someone other than
-the original author.
+cost~\cite{huang2016strassen}. Re-executing a specific implementation
+and checking whether it does what its own writeup claims is a useful
+check regardless of who wrote the code. This project applies that check
+to the author's own earlier, unpublished AVX-512 DGEMM/Strassen
+implementation (an undergraduate course project, never submitted or
+peer-reviewed) against its accompanying writeup, and finds real bugs
+(Section~\ref{sec:audit}) -- evidence that this kind of audit is worth
+doing routinely, including on one's own code.
 
 The audit also surfaced a methodological question with broader
 implications than this one codebase: a large, apparently clean OpenMP
 scheduling performance win, measured once on a virtualized development
-environment, turned out not to survive a properly repeated measurement
-(Section \ref{sec:vmcase}). This is a domain-specific instance of a
-general phenomenon Mytkowicz et al.\ documented in 2009 -- that
+environment, did not survive a properly repeated measurement
+(Section~\ref{sec:vmcase}). This is a domain-specific instance of a
+phenomenon Mytkowicz et al.\ documented in 2009 -- that
 ``insignificant'' experimental-setup choices can flip a benchmark's
-conclusion~\cite{mytkowicz2009producing} -- and, as far as our own
-literature search found (Section \ref{sec:related}), it has not
-previously been demonstrated as a targeted case study for a
-DGEMM/OpenMP scheduling claim specifically. Given how routinely such
-benchmarks are now run inside cloud VMs and WSL2-style virtualized dev
-environments, that gap seemed worth closing with a concrete, repeatable
-example rather than a general warning.
+conclusion~\cite{mytkowicz2009producing} -- and, to our knowledge, it
+has not previously been demonstrated as a targeted case study for a
+DGEMM/OpenMP scheduling claim (Section~\ref{sec:related}). Given how
+routinely such benchmarks now run inside cloud VMs and WSL2-style
+virtualized environments, closing that gap with a concrete, repeatable
+example seemed more useful than a general warning.
 
 Finally, in the course of extending this project's own numerical-
 accuracy work, we found a genuinely new (2024) result in the fast-
 matrix-multiplication literature -- an alternate-basis Strassen variant
 with a provably better accuracy bound~\cite{dumas2024strassen} -- that,
-as far as we could determine, had never been implemented as a real
-recursive block algorithm or benchmarked on hardware under realistic
-packed/blocked execution; the source paper reports only asymptotic
-operation counts and an accuracy-vs-size plot, no wall-clock or
-phase-timed performance data at all. Section \ref{sec:dumas} closes that
-gap and reports the accuracy/performance trade-off its own authors did
-not measure.
+to our knowledge, had never been implemented as a real recursive block
+algorithm or benchmarked on hardware under realistic packed/blocked
+execution; the source paper reports only asymptotic operation counts
+and an accuracy-vs-size plot, no wall-clock or phase-timed performance
+data. Section~\ref{sec:dumas} closes that gap and reports the
+accuracy/performance trade-off its own authors did not measure.
 
 \subsection{Contributions}
 \begin{enumerate}
@@ -218,12 +225,17 @@ not measure.
     itself never tested) and performance cost (a number nobody has
     published). See Section \ref{sec:dumas}.
   \item Supporting material: a from-scratch AVX2 DGEMM tuned against
-    production BLAS, hardware-counter root-cause analysis explaining
-    \emph{why} several classical performance results hold, cross-
-    compiler codegen differences, a from-scratch classical-Strassen
-    rebuild with a measured optimized-vs-optimized crossover, and a
-    rectangular/irregular-shape performance-cliff finding. See Section
-    \ref{sec:supporting}.
+    production BLAS -- at $n{=}30$ with bootstrap confidence intervals,
+    its confidence interval does not overlap OpenBLAS's, BLIS's, or
+    Intel MKL's on the development machine (Section
+    \ref{sec:blas-baseline}) -- hardware-counter root-cause analysis
+    explaining \emph{why} several classical performance results hold,
+    cross-compiler codegen differences, a from-scratch classical-
+    Strassen rebuild with a measured optimized-vs-optimized crossover,
+    and a rectangular/irregular-shape performance-cliff finding. See
+    Section \ref{sec:supporting}. The AVX-512-vs-AVX2 finding above is
+    replicated on a second, independent machine (Section
+    \ref{sec:avx512}).
   \item A public, reproducible harness and dataset backing every number
     in this paper. See Section \ref{sec:artifact}.
 \end{enumerate}
@@ -343,15 +355,14 @@ confidence intervals and a Games-Howell pairwise-significance test to
 GEMM benchmarking across 30 trials per configuration -- the statistical
 standard Section~\ref{sec:methodology} adopts as the target protocol,
 not yet retrofitted onto every headline number in this draft (see
-Section~\ref{sec:threats}). We are careful to distinguish our own sense
-of ``reproducible'' (a conclusion that survives repeated, controlled
-measurement) from two adjacent but different senses already in the
-literature: GEMMbench~\cite{gemmbench2015} is a crowdsourced
-benchmark-\emph{collection} framework, and a separate line of work on
-``reproducible'' GEMM concerns bit-for-bit reproducibility despite
-floating-point non-associativity and dynamic scheduling -- neither is
-the measurement-validity question this paper asks, and the three should
-not be conflated. The broader reproducibility/artifact-evaluation trend
+Section~\ref{sec:threats}). This paper's sense of ``reproducible'' (a
+conclusion that survives repeated, controlled measurement) is distinct
+from two adjacent senses already in the literature: GEMMbench~\cite{gemmbench2015}
+is a crowdsourced benchmark-\emph{collection} framework, and a separate
+line of work on ``reproducible'' GEMM concerns bit-for-bit
+reproducibility despite floating-point non-associativity and dynamic
+scheduling. Neither is the measurement-validity question this paper
+asks. The broader reproducibility/artifact-evaluation trend
 in systems and HPC research~\cite{repro2025hpc,artifacts2022citations,toms2015rcr}
 -- SC's mandatory Artifact Description appendix since 2019, ACM TOMS's
 Replicated Computational Results designation -- is the concrete
@@ -381,10 +392,10 @@ No machine used anywhere in this project is the audited paper's target
 platform (a dual-socket Intel Xeon Gold 5218 / Cascade Lake cluster
 node with AVX-512), and AVX-512 hardware was not reachable during the
 audit and the measurements of Sections~\ref{sec:vmcase}--\ref{sec:supporting};
-a laptop-class AVX-512 machine became available afterwards and is used
-only for Section~\ref{sec:avx512} -- stated plainly here and returned to
-in Section~\ref{sec:threats}, not glossed over. Two machines were used
-throughout, plus a third for Section~\ref{sec:avx512}:
+two laptop-class AVX-512 machines became available afterwards and are
+used only for Section~\ref{sec:avx512} (limitations discussed in
+Section~\ref{sec:threats}). Two machines were used throughout, plus two
+more for Section~\ref{sec:avx512}:
 
 \begin{itemize}
   \item \textbf{Development machine}: a single-socket Intel Core
@@ -423,7 +434,7 @@ throughout, plus a third for Section~\ref{sec:avx512}:
     Lake target), so generic \texttt{cache-references}/
     \texttt{cache-misses} and \texttt{L1-dcache-*} events substitute
     throughout Section~\ref{sec:supporting}'s root-cause analysis.
-  \item \textbf{AVX-512 laptop (Section~\ref{sec:avx512} only)}: an
+  \item \textbf{AVX-512 laptop \#1 (Section~\ref{sec:avx512} only)}: an
     Intel Core i5-1145G7 (Tiger Lake, 4 cores / 8 threads, 16\,GB RAM),
     under WSL2 (Ubuntu~26.04, gcc~15.2.0). \texttt{cpuinfo} reports
     \texttt{avx512f}/\texttt{dq}/\texttt{bw}/\texttt{vl}/\texttt{vnni}/
@@ -431,6 +442,13 @@ throughout, plus a third for Section~\ref{sec:avx512}:
     unavailable (WSL2), and a single 512-bit FMA unit per core and
     likely frequency throttling make absolute throughput unrepresentative
     of the audited paper's Xeon target.
+  \item \textbf{AVX-512 laptop \#2 (Section~\ref{sec:avx512} only)}: an
+    Intel Core i7-11800H (Tiger Lake-H, 8 cores / 16 threads, 12\,GB
+    RAM), under WSL2 (Ubuntu~22.04, gcc~11.4.0), run through the
+    identical pipeline as laptop~\#1 to check whether the AVX-512
+    finding replicates on a second, higher-core-count part from the
+    same microarchitecture family. Same caveats as laptop~\#1 (threads
+    unpinned, hardware counters unavailable under WSL2).
 \end{itemize}
 
 \subsection{The repeated-measurement protocol}
@@ -449,19 +467,21 @@ two single draws landing on opposite tails of one wide ($\approx$217--296)
 distribution. Every scheduling- or placement-related claim in this
 paper is held to that standard from this point on: $n{\geq}4$--$5$
 independent repeats minimum, reporting the full range, before any
-comparison is stated as a finding rather than a single-run observation
--- this is the protocol Section~\ref{sec:vmcase}'s headline comparisons
-were actually run under (Section~\ref{sec:vmcase-repeat}), and it is
-already enough to overturn the single-run finding it re-examines.
+comparison is stated as a finding rather than a single-run observation.
+This is the protocol under which Section~\ref{sec:vmcase}'s headline
+comparisons were actually run (Section~\ref{sec:vmcase-repeat}), and it
+is already enough to overturn the single-run finding it re-examines.
 The stronger target protocol, following Davis
 (2025)~\cite{davis2025hpmm}, is $n=30$ repetitions per configuration
 (matching \cite{davis2025hpmm}'s own choice, which we adopt rather than
 re-derive) with bootstrap 95\% confidence intervals and a Games-Howell
 pairwise-significance test in place of the range-reporting used above.
 Section~\ref{sec:vmcase-repeat}'s four conditions have since been
-re-run under this exact protocol (Section~\ref{sec:vmcase-n30}); it has
-not yet been retrofitted onto Section~\ref{sec:supporting}'s numbers --
-see Section~\ref{sec:threats} for exactly what that leaves unresolved.
+re-run under this exact protocol (Section~\ref{sec:vmcase-n30}), as have
+two of Section~\ref{sec:supporting}'s tables and
+Section~\ref{sec:dumas}'s performance-cost table; it has not yet been
+retrofitted onto every number in this paper -- see
+Section~\ref{sec:threats} for exactly what that leaves unresolved.
 
 \subsection{Instrumentation}
 Three complementary instrumentation layers are used throughout: (1)
@@ -495,15 +515,16 @@ obtainable anywhere in this project (Section~\ref{sec:threats}).
 %==============================================================
 
 We audited the paper's own codebase (\texttt{audited\_submission/avx/}, \texttt{audited\_submission/Parallel/},
-\texttt{audited\_submission/test/}) against its own description, using two independent
-verification paths since no AVX-512 hardware was available at that stage
-(real AVX-512 execution is reported in Section~\ref{sec:avx512}): a temporary
-scalar stand-in kernel (same packed-buffer contract, no intrinsics, not
-kept in the repository afterward) that let the real packing/blocking
-control logic execute and be checked on any CPU during the audit
-itself, and a permanent AVX2 port (\texttt{audited\_submission/avx/kernel\_avx2.c},
+\texttt{audited\_submission/test/}) against its own description. No AVX-512
+hardware was available at this stage (real AVX-512 execution is
+reported in Section~\ref{sec:avx512}), so verification used two
+independent paths instead: a temporary scalar stand-in kernel (same
+packed-buffer contract, no intrinsics, not kept in the repository
+afterward) that let the real packing/blocking control logic execute and
+be checked on any CPU during the audit itself, and a permanent AVX2 port
+(\texttt{audited\_submission/avx/kernel\_avx2.c},
 \texttt{audited\_submission/avx/strassen\_avx2.c}, confirmed via \texttt{objdump} to emit
-genuine \texttt{vfmadd*pd} instructions) that gives durable, re-runnable,
+genuine \texttt{vfmadd*pd} instructions) giving durable, re-runnable,
 genuinely vectorized correctness coverage going forward. Every fix below
 was verified by real execution, not by reading the code and reasoning
 about it.
@@ -578,16 +599,16 @@ kind of divergence a symmetric-matrix-only test is structurally unable
 to surface.
 
 A second, repo-wide review pass at higher scrutiny found and fixed six
-further defects beyond the four above, three worth calling out
-specifically: a heap overflow for $N \le 0$ and small powers of two in
-the Strassen padding logic added to fix bug~3 in
+further defects beyond the four above; three are worth calling out
+specifically. First, a heap overflow for $N \le 0$ and small powers of
+two in the Strassen padding logic added to fix bug~3 in
 Table~\ref{tab:bugs} -- \emph{a regression introduced by this audit's
-own first-pass fix}, only surfaced by a second, more thorough pass, and
-worth noting as a general lesson that a fix itself needs re-review, not
-just the code it touched; an analogous infinite-recursion-at-$n{=}1$
-bug in two other Strassen variants sharing the same unfloored padding
-logic; and four unchecked Win32 API calls in the native core-topology
-classifier (\texttt{SetThreadAffinityMask}, \texttt{CreateThread},
+own first-pass fix}, only surfaced by a second, more thorough pass. The
+general lesson: a fix itself needs re-review, not just the code it
+touched. Second, an analogous infinite-recursion-at-$n{=}1$ bug in two
+other Strassen variants sharing the same unfloored padding logic. Third,
+four unchecked Win32 API calls in the native core-topology classifier
+(\texttt{SetThreadAffinityMask}, \texttt{CreateThread},
 \texttt{WaitForMultipleObjects}, and a bit-shift that overflowed for
 CPU index~$\ge$64) whose silent failure modes would have produced
 plausible-looking but wrong core-utilization numbers -- directly
@@ -596,7 +617,7 @@ which depend on that same classifier being correct. Four further issues
 were found and deliberately left unfixed, each with a stated reason
 (memory-cost/complexity trade-offs, an intentional drop-in-alternative
 symbol design, and one ambiguous-intent global-state question) rather
-than silently dropped or guessed at -- see
+than silently dropped or guessed at; see
 \texttt{revalidation/correctness/2026-09-09\_bug\_evidence\_and\_fixes.md}
 for the full reasoning.
 
@@ -713,7 +734,7 @@ The portable harness (\texttt{reproduce.sh --full}) was run on the same
 machine under the same protocol (Table~\ref{tab:repro-avx2}). Correctness
 passed in all 30 launches of every step. The Dumas et al.\ throughput cost
 relative to classical Strassen is 19.3\% here ($N{=}1024$, depth~3), in
-the same direction and close in magnitude to the 20.7\% measured on the
+the same direction and close in magnitude to the 19.7\% measured on the
 development machine at $N{=}2048$ (Section~\ref{sec:dumas-perf}); the
 two configurations differ, so this is a consistency check, not a
 replication of the identical cell.
@@ -728,13 +749,47 @@ Strassen and Dumas: $N{=}1024$, depth~3; $T{=}8$. Data:
 \label{tab:repro-avx2}
 \begin{tabular}{lrl}
 \toprule
-Step & GFLOP/s & 95\% CI \
+Step & GFLOP/s & 95\% CI \\
 \midrule
-Classical DGEMM (\texttt{matmul\_ladder}) & 93.9 & [91.1, 97.3] \
-Classic Strassen & 31.4 & [31.3, 31.5] \
-Dumas et al.\ (2024) & 25.4 & [25.0, 25.6] \
-\texttt{dgemm\_base} (asm kernel) & 83.2 & [82.9, 83.5] \
-\texttt{strassen\_1level} (asm kernel) & 32.1 & [32.0, 32.2] \
+Classical DGEMM (\texttt{matmul\_ladder}) & 93.9 & [91.1, 97.3] \\
+Classic Strassen & 31.4 & [31.3, 31.5] \\
+Dumas et al.\ (2024) & 25.4 & [25.0, 25.6] \\
+\texttt{dgemm\_base} (asm kernel) & 83.2 & [82.9, 83.5] \\
+\texttt{strassen\_1level} (asm kernel) & 32.1 & [32.0, 32.2] \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\paragraph{A second independent machine.}
+A second AVX-512-capable laptop (Core i7-11800H, Tiger Lake-H, 8
+physical/16 logical cores -- a different part from the i5-1145G7 above,
+though the same Willow Cove core microarchitecture family) became
+available and was run through the identical $n{=}30$ pipeline
+unmodified (Table~\ref{tab:avx512-2machine}). The direction and rough
+magnitude of the AVX-512-versus-AVX2 finding replicate: both machines
+show a large, Holm-significant speedup at their respective
+largest-$N$/most-threaded headline cell, and both show the same
+qualitative noise pattern (many cells with CV above 5\%, concentrated at
+high thread counts and small $N$), consistent with laptop thermal/power
+throttling under sustained load rather than a property specific to
+either chip. Correctness passed in full on this second machine too (34
+of 34 cases, \texttt{correctness\_avx512.txt}).
+
+\begin{table}[h]
+\centering
+\small
+\caption{Headline AVX-512-vs-AVX2 cell (largest $N$, most threads) on
+two independent machines, $n{=}30$ each. Data:
+\texttt{revalidation/benchmarks/2026-10-19\_ceburu03-11th-Gen-i5-1145G7-avx512-n30-full/}
+and
+\texttt{revalidation/benchmarks/2026-10-19\_LAPTOP-4IN8H3IN-11th-Gen-i7-11800H-avx512-n30-full\_224020/}.}
+\label{tab:avx512-2machine}
+\begin{tabular}{lllrrr}
+\toprule
+Machine & Cores & Cell & Ratio & 95\% CI & Holm $p$ \\
+\midrule
+i5-1145G7 & 4C/8T  & $N{=}4096,T{=}8$  & 2.01$\times$ & [1.99, 2.03] & 0.004 \\
+i7-11800H & 8C/16T & $N{=}4096,T{=}16$ & 1.78$\times$ & [1.74, 1.82] & 0.005 \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -792,8 +847,8 @@ $(N,T)$, static wins at the next, for the same schedule pair on the
 same machine. Read uncritically, this pattern would seem to confirm the
 original dynamic-scheduling finding; Section~\ref{sec:repeated}'s
 protocol is precisely why we do not read it that way without repeating
-it first. We also flag, rather than quietly discard, an unexplained
-discrepancy in this sweep: the same $N{=}1024$, $T{=}8$ Windows
+it first. One unexplained discrepancy in this sweep is worth flagging:
+the same $N{=}1024$, $T{=}8$ Windows
 configuration measured roughly $2\times$ lower in this back-to-back
 27-configuration sweep than in the isolated repeated-run experiment
 below, run minutes apart on the same binary and machine -- the leading
@@ -918,12 +973,11 @@ $0.000\mathrm{e}{+}00$), reproducibly on this machine, with no
 WSL2/Hyper-V, thermal-buildup, argument-corruption, or antivirus-scan
 explanation we could confirm despite directly testing each. Driving the
 same invocations through plain, literal-argument commands instead
-avoided it cleanly across all 120 measurements reported above. We
-record this rather than quietly discard it, since it is itself a
-concrete instance of this section's own thesis: an automation layer
-between the researcher and the measurement can silently and severely
-distort a result, and the only real defense is checking the result
-against a sanity floor, not trusting the tool.
+avoided it cleanly across all 120 measurements reported above. This is
+itself a concrete instance of this section's own thesis: an automation
+layer between the researcher and the measurement can silently and
+severely distort a result, and the only real defense is checking the
+result against a sanity floor, not trusting the tool.
 
 \subsection{Conclusion}
 On this hardware, in this pass, properly repeated measurement --
@@ -1065,10 +1119,10 @@ the $>$1400\% catastrophic error Section~\ref{sec:supporting} measures
 under \emph{row-scaled, correlated} ill-conditioning specifically.
 Applying that same row-correlated construction directly (15 seeds,
 depths 1--3, \texttt{revalidation/dumas2024/row\_scaled\_seeds\_raw.csv})
-answers the question Section~\ref{sec:future} previously left open with
-a genuinely mixed result, not a clean win either way: Dumas's
-Frobenius-relative advantage holds even here (lower in 15/15 seeds at
-every depth), but on max-componentwise-relative error -- the metric the
+answers the question Section~\ref{sec:future} previously left open, and
+the result is genuinely mixed, not a clean win either way. Dumas's
+Frobenius-relative advantage holds even here: lower in 15/15 seeds at
+every depth. But on max-componentwise-relative error -- the metric the
 catastrophic case is actually defined by -- Dumas is lower in only
 8--9/15 seeds per depth, essentially a coin flip, exactly as expected
 for a bound that is norm-type rather than componentwise
@@ -1089,21 +1143,26 @@ $N\in\{512,1024,2048\}\times$depth$\in\{1,2,3\}$
 \begin{table}[h]
 \centering
 \caption{Classical Strassen vs.\ the Dumas et al.\ (2024) variant at
-$N=2048$, $T=8$ (dev machine, 5-repetition best-of; not yet bootstrap-
-CI'd, see Section~\ref{sec:threats}). \texttt{leaf\_s} is the shared,
-unmodified leaf kernel -- the control confirming the slowdown is
-attributable to the combine/scale formula, not the harness.}
+$N=2048$, $T=8$ (dev machine). GFLOP/s is mean with bootstrap 95\% CI,
+$n{=}30$ independent launches per row (refreshed from an earlier
+single-run pass; data:
+\texttt{revalidation/dumas2024/n30\_rerun\_20261020\_152105/}).
+\texttt{leaf\_s}/\texttt{addsub\_s} are retained from that single-run
+pass as mechanism-explaining diagnostics, not re-measured at $n{=}30$
+-- \texttt{leaf\_s} is the shared, unmodified leaf kernel, the control
+confirming the slowdown is attributable to the combine/scale formula,
+not the harness.}
 \label{tab:dumas-perf}
-\begin{tabular}{lrrrr}
+\begin{tabular}{lrrrl}
 \toprule
-Depth & Algorithm & leaf\_s (s) & addsub\_s (s) & GFLOP/s \\
+Depth & Algorithm & leaf\_s (s) & addsub\_s (s) & GFLOP/s (95\% CI, $n{=}30$) \\
 \midrule
-1 & Classical Strassen & 0.288 & 0.041 & 50.79 \\
-1 & Dumas (2024)        & 0.295 & 0.058 & 47.56 \\
-2 & Classical Strassen & 0.268 & 0.109 & 42.76 \\
-2 & Dumas (2024)        & 0.273 & 0.155 & 38.16 \\
-3 & Classical Strassen & 0.293 & 0.259 & 127.67 \\
-3 & Dumas (2024)        & 0.301 & 0.408 & 101.27 \\
+1 & Classical Strassen & 0.288 & 0.041 & 52.13 [51.96, 52.29] \\
+1 & Dumas (2024)        & 0.295 & 0.058 & 49.46 [49.28, 49.64] \\
+2 & Classical Strassen & 0.268 & 0.109 & 43.67 [43.52, 43.81] \\
+2 & Dumas (2024)        & 0.273 & 0.155 & 39.48 [39.26, 39.70] \\
+3 & Classical Strassen & 0.293 & 0.259 & 129.83 [128.38, 131.20] \\
+3 & Dumas (2024)        & 0.301 & 0.408 & 104.29 [103.57, 105.01] \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -1113,10 +1172,14 @@ Depth & Algorithm & leaf\_s (s) & addsub\_s (s) & GFLOP/s \\
 substantially higher for the Dumas variant ($\approx$57\% higher at
 depth~3), driven by its 24-operation straight-line program (several
 irrational-$\sqrt3$-coefficient scale-and-combine steps) against
-classical Strassen's $\approx$18 plain adds/subtracts. Net effect: a
-$\approx$20.7\% GFLOP/s cost at $N{=}2048$, depth~3 for the accuracy
-improvement measured above; the cost shrinks at shallower depth
-($\approx$6.4\% at depth~1, fewer combine levels executed). As far as
+classical Strassen's $\approx$18 plain adds/subtracts. Net effect, now
+at $n{=}30$ with non-overlapping confidence intervals at every depth: a
+19.7\% GFLOP/s cost at $N{=}2048$, depth~3 for the accuracy improvement
+measured above (CV 3.1\% and 2.0\% for Strassen and Dumas respectively
+-- both comfortably below this paper's own 5\% noise threshold, unlike
+Table~\ref{tab:strassen-crossover}'s unpinned-all-core runs); the cost
+shrinks at shallower depth (5.1\% at depth~1, 9.6\% at depth~2, fewer
+combine levels executed). As far as
 we found, \emph{neither the source paper (which reports only
 asymptotic operation counts and an accuracy-vs-size plot) nor any other
 publication reports this accuracy/performance trade-off}.
@@ -1127,28 +1190,70 @@ publication reports this accuracy/performance trade-off}.
 %==============================================================
 
 \subsection{A from-scratch AVX2 DGEMM vs.\ production BLAS}
+\label{sec:blas-baseline}
 Independent of the audited codebase, we built a new AVX2 DGEMM from
 scratch and tuned it via a disassembly-driven ablation series
 (operand-swap ordering, unroll-plus-prefetch, microkernel shape
-selection, hand-written assembly, vectorized operand packing), reaching
-$\approx$87--92\% of production OpenBLAS/BLIS/MKL throughput -- the
-figure we treat as the architecture-level, portable claim. A dynamic-
-scheduling variant on top measured 117--130\% of production BLAS under
-WSL2/Hyper-V; per Section~\ref{sec:vmcase}'s finding, we now scope that
-figure explicitly to ``measured under WSL2/Hyper-V'' rather than
+selection, hand-written assembly, vectorized operand packing). An
+earlier pass of this comparison, at $n{=}1$ per library, put it at
+$\approx$87--92\% of production OpenBLAS/BLIS/MKL throughput; repeating
+it under this paper's own $n{=}30$/bootstrap-CI protocol
+(Section~\ref{sec:repeated}) on the development machine ($N{=}2048$,
+$T{=}24$, all logical cores, identical problem setup and verification
+path for every library via a shared driver) gives a different answer
+(Table~\ref{tab:blas-baseline}).
+
+\begin{table}[h]
+\centering
+\caption{This project's \texttt{dgemm\_base} kernel versus a naive
+reference and three production BLAS libraries, $N{=}2048$, $T{=}24$,
+$n{=}30$ independent launches per row, dev machine (i7-13700K). Data:
+\texttt{src/baselines/results\_n30\_20261019\_215423/}.}
+\label{tab:blas-baseline}
+\begin{tabular}{lrrr}
+\toprule
+Library & GFLOP/s & 95\% CI & CV \\
+\midrule
+naive (reference)     & 0.66   & [0.656, 0.667]   & 2.3\% \\
+BLIS                   & 201.8  & [169.6, 236.4]   & 47.3\% \\
+OpenBLAS               & 374.6  & [354.5, 393.4]   & 14.8\% \\
+Intel MKL              & 440.3  & [438.1, 442.6]   & 1.5\% \\
+This project (\texttt{dgemm\_base}) & \textbf{492.8} & \textbf{[486.0, 499.9]} & 4.0\% \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\texttt{dgemm\_base}'s confidence interval does not overlap any of the
+three production libraries' -- including MKL, Intel's own hand-tuned
+library on Intel's own hardware -- so on this specific machine, for this
+specific problem size and thread count, the from-scratch kernel's lead
+is not noise. The claim is scoped to one machine, one $N$, and one
+thread count. MKL/OpenBLAS/BLIS all ship with internal
+tuning heuristics (cache-size detection, kernel dispatch by
+microarchitecture) that may simply be miscalibrated for this specific
+hybrid performance/efficiency-core consumer part, rather than genuinely
+beaten in general. BLIS's 47.3\% coefficient of
+variation here is consistent with that reading: a plausible instance of
+this project's own Section~\ref{sec:vmcase} thesis (unpinned thread
+scheduling on a hybrid P/E-core chip producing unstable throughput)
+showing up inside someone else's library, not evidence that BLIS is
+slower in general. A dynamic-scheduling variant on top of our own
+kernel separately measured 117--130\% of production BLAS under
+WSL2/Hyper-V; per Section~\ref{sec:vmcase}'s finding, we scope that
+earlier figure explicitly to ``measured under WSL2/Hyper-V'' rather than
 generalizing it, since the scheduling-policy mechanism behind it did not
 survive repeated, controlled measurement elsewhere in this project.
 
 \subsection{Hardware-counter root-cause analysis}
-Using hardware performance counters on \texttt{glogin} (unavailable
-under WSL2/Hyper-V; Section~\ref{sec:environments}) to explain, not just
-report, several classical DGEMM performance results: naive triple-loop
+Hardware performance counters on \texttt{glogin} (unavailable
+under WSL2/Hyper-V; Section~\ref{sec:environments}) explain, not just
+report, several classical DGEMM performance results. Naive triple-loop
 DGEMM's well-known performance cliff at scale is driven by IPC cratering
 from $\approx$1.3 to $\approx$0.65 as $N$ crosses 256, with branch-miss
-rate \emph{falling} and LLC-level miss rate staying near zero throughout
--- ruling out both branch misprediction and DRAM-capacity misses, and
-pinning the cause specifically to repeated L2/L3-latency exposure from
-$B$'s column-access pattern, a blocking/reuse-distance problem rather
+rate \emph{falling} and LLC-level miss rate staying near zero throughout.
+That rules out both branch misprediction and DRAM-capacity misses, and
+pins the cause specifically to repeated L2/L3-latency exposure from
+$B$'s column-access pattern -- a blocking/reuse-distance problem rather
 than a software-prefetch-for-DRAM-latency one. Blocking's own advantage
 is not explained by a lower L1-miss rate in isolation (blocked's 48\%
 L1-miss rate is barely better than naive's 63\%) but by \emph{where}
@@ -1157,14 +1262,15 @@ through cache fast enough that most L1 misses hit nearby in L2 rather
 than paying full round-trip latency, yielding a $3.6\times$ IPC
 improvement despite the similar raw miss rate. Pure (uncut-off)
 Strassen has the \emph{best} IPC and cache behavior of every algorithm
-measured, and its cost is purely instruction/allocation volume: 19{,}608
-recursive calls at $N{=}64$ growing to 6{,}725{,}601 at $N{=}512$,
-exactly matching the audited paper's own reported figures, directly
-confirming the paper's own qualitative diagnosis (``excessive
-recursion,'' ``allocator pressure'') with hard counter evidence rather
-than just call-count bookkeeping, and explaining why parallelizing it
-makes things \emph{worse} (more threads means more concurrent allocator
-contention layered on an already overhead-dominated workload). At
+measured, and its cost is purely instruction/allocation volume:
+19{,}608 recursive calls at $N{=}64$ growing to 6{,}725{,}601 at
+$N{=}512$, exactly matching the audited paper's own reported figures.
+That directly confirms the paper's own qualitative diagnosis
+(``excessive recursion,'' ``allocator pressure'') with hard counter
+evidence rather than just call-count bookkeeping, and explains why
+parallelizing it makes things \emph{worse}: more threads means more
+concurrent allocator contention layered on an already overhead-dominated
+workload. At
 $N{=}1024$, a loop-reordered-and-unrolled hybrid-Strassen variant beats
 a blocked-and-unrolled classical variant on every axis simultaneously
 (0.693s vs.\ 2.329s wall-clock, 1.69 vs.\ 1.28 IPC, 25.0\% vs.\ 40.6\%
@@ -1226,23 +1332,28 @@ the classical $2N^3$ FLOP formula for direct comparability, deliberately
 labeled ``effective'' to avoid overstating Strassen's true (lower) FLOP
 count (Table~\ref{tab:strassen-crossover}):
 
+An earlier pass of this table reported a single best-of-5 measurement
+per cell; Table~\ref{tab:strassen-crossover} repeats it under this
+paper's own $n{=}30$/bootstrap-CI protocol (Section~\ref{sec:repeated},
+all 24 logical cores, unpinned).
+
 \begin{table}[h]
 \centering
 \small
 \caption{Optimized classical DGEMM vs.\ optimized 1-level Strassen,
-effective GFLOP/s ($=2N^3/\text{time}$). A genuine, measured crossover
-at $N{=}8192$, not the ``never crosses'' story an unoptimized-vs-
-optimized comparison would tell.}
+effective GFLOP/s ($=2N^3/\text{time}$), mean with bootstrap 95\% CI,
+$n{=}30$ independent launches per cell. Data:
+\texttt{src/strassen2/results\_n30\_crossover\_20261020\_152612/}.}
 \label{tab:strassen-crossover}
 \begin{tabular}{lrrr}
 \toprule
 $N$ & DGEMM baseline & Strassen (1-level) & Ratio \\
 \midrule
-512  & 245.8 & 22.9  & 10.8$\times$ \\
-1024 & 466.9 & 105.6 & 4.4$\times$ \\
-2048 & 458.2 & 260.0 & 1.76$\times$ \\
-4096 & 434.7 & 375.0 & 1.16$\times$ \\
-8192 & 426.6 & 426.7 & $\approx$1.00$\times$ (crossover) \\
+512  & 272.8 [252.5, 287.5] (CV 18.5\%) & 14.5 [13.8, 15.0] (CV 12.0\%)  & 18.8$\times$ \\
+1024 & 501.7 [454.1, 543.0] (CV 25.4\%) & 73.0 [69.6, 76.2] (CV 13.2\%) & 6.9$\times$ \\
+2048 & 486.1 [465.9, 500.5] (CV 10.4\%) & 239.1 [234.0, 243.8] (CV 6.0\%) & 2.03$\times$ \\
+4096 & 391.9 [360.2, 420.2] (CV 21.9\%) & 379.0 [369.3, 388.5] (CV 7.2\%) & 1.03$\times$ (CIs overlap) \\
+8192 & 402.9 [386.7, 416.9] (CV 10.8\%) & \textbf{472.0 [469.7, 474.2]} (CV 1.4\%) & 0.85$\times$ (Strassen ahead) \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -1250,25 +1361,47 @@ $N$ & DGEMM baseline & Strassen (1-level) & Ratio \\
 \begin{figure}[h]
 \centering
 \includegraphics[width=\linewidth]{figures/fig_strassen_crossover.pdf}
-\caption{Table~\ref{tab:strassen-crossover}, visualized: Strassen's
-fixed $\approx2\times$ arithmetic-work advantage only overcomes its
-overhead once $N$ is large enough that the baseline's own curve has
-already flattened near its practical peak.}
+\caption{Table~\ref{tab:strassen-crossover}, visualized: mean effective
+GFLOP/s with 95\% CI bands. The DGEMM baseline's own confidence
+intervals are wide enough to overlap Strassen's at $N{=}4096$ and to be
+beaten outright at $N{=}8192$.}
 \label{fig:strassen-crossover}
 \end{figure}
 
-A 2-level variant is consistently worse at every size tested (recursion
+The practical conclusion changes, not just its error bars, as
+Figure~\ref{fig:strassen-crossover} makes visible directly: the two
+curves' CI bands are the figure's whole point, not an afterthought on
+top of the table. The original single-run table framed $N{=}8192$ as an
+approximate parity point; at $n{=}30$, the two are not statistically
+distinguishable at $N{=}4096$ (confidence intervals overlap) and
+Strassen is significantly \emph{faster} by $N{=}8192$ (DGEMM's own 95\%
+CI ceiling, 416.9, is below Strassen's floor, 469.7) -- a genuine
+crossover somewhere at or before $N{=}4096$--8192, not merely an
+approach to parity. The DGEMM baseline itself is the more striking part
+of this table: its
+coefficient of variation reaches 25.4\% at $N{=}1024$. The raw samples
+behind that cell are not a smooth unimodal spread but two clusters -- 24
+of 30 launches land between 500--608~GFLOP/s, the remaining 6 fall to
+200--372~GFLOP/s. That pattern is directly consistent with this paper's
+own Section~\ref{sec:vmcase} finding: unpinned thread placement on this
+machine's heterogeneous performance/efficiency cores, not the
+algorithm, is the dominant source of variance. Strassen's own
+coefficient of variation is consistently lower at every size
+(1.4--13.2\% vs.\ DGEMM's 10.4--25.4\%), plausibly because its smaller
+per-thread work units are less exposed to a single unlucky core
+assignment. A 2-level
+variant is consistently worse at every size tested (recursion
 overhead compounds faster than arithmetic savings materialize) and
 never reaches a crossover in this range. A companion accuracy sweep on
-this same rebuild is what produces this paper's headline numerical-
-accuracy finding: under row-scaled ill-conditioning, 1-level Strassen's
+this same rebuild produces this paper's headline numerical-accuracy
+finding. Under row-scaled ill-conditioning, 1-level Strassen's
 max-componentwise-relative error reaches 84\% at $N{=}1024$ while
-2-level reaches \textbf{1436\%} (i.e.\ worse than the largest element
-being completely wrong), while classical DGEMM stays at
-$\approx10^{-10}$ throughout the same sweep -- confirming, with a
-dramatic and reproducible number, exactly the accuracy concern the
-audited paper cites as a reason to avoid fast-multiplication approaches
-without ever measuring it for its own implementation.
+2-level reaches \textbf{1436\%} -- worse than the largest element being
+completely wrong -- while classical DGEMM stays at $\approx10^{-10}$
+throughout the same sweep. That dramatic, reproducible number confirms
+the exact accuracy concern the audited paper cites as a reason to avoid
+fast-multiplication approaches, without ever measuring it for its own
+implementation.
 
 \subsection{Rectangular and irregular shapes}
 Generalizing the portable harness from square-only to arbitrary
@@ -1299,12 +1432,17 @@ reachable during the audit proper, so the correctness results of
 Section~\ref{sec:audit} rest on a temporary scalar stand-in kernel plus
 a permanent, execution-verified AVX2 port. Section~\ref{sec:avx512}
 later closes part of that gap by executing the real AVX-512 kernel on
-one laptop-class machine (and immediately found a bug the stand-ins
-could not), but it is a single WSL2 machine with unpinned threads, a
-single-session grid, and noisy cells
-(CV up to 30\%); it is not a Xeon-class AVX-512 server, does not test
-the paper's dual-socket claims, and its confidence intervals do not cover
-between-day variation. No literal
+two laptop-class machines (and immediately found a bug the stand-ins
+could not), but both are WSL2 machines with unpinned threads,
+single-session grids, and a large fraction of noisy cells (CV up to
+54\% on the second machine, concentrated at high thread counts,
+consistent with laptop thermal/power throttling under sustained load);
+neither is a Xeon-class AVX-512 server, neither tests the paper's
+dual-socket claims, and their confidence intervals do not cover
+between-day variation. The two machines agree on direction and rough
+magnitude (Table~\ref{tab:avx512-2machine}), which is evidence the
+finding is not an artifact of one specific laptop, not evidence it holds
+on server-class or non-hybrid-core hardware. No literal
 bare-metal Linux machine was available; native Windows (no
 virtualization layer) is the closest non-Hyper-V substitute reached, and
 Section~\ref{sec:vmcase}'s controlled experiment is confined to that
@@ -1324,11 +1462,17 @@ constraint. Section~\ref{sec:vmcase}'s headline comparisons now meet
 the stronger $n{=}30$/bootstrap-CI/Games-Howell protocol
 (Section~\ref{sec:vmcase-n30}), not merely the weaker $n{\geq}4$--$5$/
 full-range protocol they were first reported under
-(Section~\ref{sec:repeated}); Section~\ref{sec:supporting}'s numbers
-still meet neither, and should be read as directionally trustworthy
-(several are corroborated by independent hardware-counter evidence
-explaining the mechanism, not just a wall-clock number) but not yet
-held to either statistical standard.
+(Section~\ref{sec:repeated}); within Section~\ref{sec:supporting}, the
+BLAS-baseline (Table~\ref{tab:blas-baseline}) and classical-Strassen-
+crossover (Table~\ref{tab:strassen-crossover}) comparisons, and
+Section~\ref{sec:dumas}'s performance-cost table
+(Table~\ref{tab:dumas-perf}), now meet the $n{=}30$/bootstrap-CI
+standard as well; the hardware-counter root-cause analysis, cross-
+compiler codegen comparison, and rectangular/irregular-shape findings
+still do not, and should be read as directionally trustworthy (several
+are corroborated by independent hardware-counter evidence explaining
+the mechanism, not just a wall-clock number) but not yet held to either
+statistical standard.
 Ballard, Demmel, Holtz and Schwartz's~\cite{ballard2012communication}
 communication-optimal parallel Strassen (CAPS) algorithm, cited in
 Section~\ref{sec:related} as the theoretical counterpart to this
@@ -1400,52 +1544,71 @@ this submission and does not substitute for it.
 \label{sec:future}
 %==============================================================
 
-We set out to check whether an earlier, unpublished AVX-512
-DGEMM/Strassen implementation does what it claims, whether its reported
-performance
-wins are real hardware effects, and whether a very recent (2024) result
-in the numerical-accuracy literature could be benchmarked for the first
-time using the same infrastructure. On the first question, we found and
-fixed four real correctness bugs (plus six more in a deeper second
-pass, and one further crash found only when the AVX-512 kernel was
-finally executed on real hardware, where it is also measured at
-roughly 2$\times$ over AVX2 for blocked DGEMM), the most serious silently
-transposing the product of a non-square multiplication. On the second, a large scheduling-policy
-performance win did not survive proper repeated measurement, while raw
-core-placement effects did -- a concrete, domain-specific demonstration
-that measurement bias (Mytkowicz et al., 2009) remains a live concern
-in exactly the kind of virtualized development environment most GEMM
-tuning work is now done in. On the third, we implemented and measured
-Dumas et al.'s 2024 alternate-basis Strassen variant for what appears to
-be the first time under realistic execution, confirming its accuracy
-claim and quantifying, for the first time, the performance cost that
-comes with it.
+This paper set out to answer three questions: whether an earlier,
+unpublished AVX-512 DGEMM/Strassen implementation does what it claims;
+whether its reported performance wins are real hardware effects; and
+whether a very recent (2024) result in the numerical-accuracy
+literature could be benchmarked for the first time using the same
+infrastructure.
 
-Concrete next steps, in priority order: a repeat of
-Section~\ref{sec:avx512} on a Xeon-class AVX-512 server and on a
-different day; cross-machine confirmation of
-Table~\ref{tab:dumas-perf}'s performance-cost figure on \texttt{glogin}
-and native Windows; project-wide adoption of Section~\ref{sec:repeated}'s bootstrap-CI protocol
-beyond Section~\ref{sec:vmcase}; and running the measurement-bias
-protocol from Section~\ref{sec:vmcase} \emph{inside} WSL2/Hyper-V itself
-(not just outside it), to settle directly whether the original
-scheduling win was virtualization-compensation rather than merely
-unreproduced elsewhere. One further direction, noted but deliberately
-not built out here: the same statistical/hardware-counter measurement
-rigor this paper applies throughout is largely absent from the fast-
-growing LLM-driven kernel-generation literature
-(Section~\ref{sec:related}), which is presently evaluated mostly on
-single or best-of-$N$ wall-clock numbers; using this project's harness
-to evaluate an LLM-generated kernel under the same protocol would be a
-natural, low-risk extension, left for future work rather than claimed
-as a contribution of this paper.
+On the first question: we found and fixed four real correctness bugs,
+six more in a deeper second pass, and one further crash found only when
+the AVX-512 kernel was finally executed on real hardware. The most
+serious of these silently transposed the product of a non-square
+multiplication. On that same real hardware, the audited kernel is also
+measured at roughly 2$\times$ over AVX2 for blocked DGEMM.
+
+On the second question: a large scheduling-policy performance win did
+not survive proper repeated measurement, while raw core-placement
+effects did. This is a concrete, domain-specific demonstration that
+measurement bias (Mytkowicz et al., 2009) remains a live concern in
+exactly the kind of virtualized development environment most GEMM
+tuning work is now done in.
+
+On the third question: we implemented and measured Dumas et al.'s 2024
+alternate-basis Strassen variant, apparently for the first time under
+realistic execution, confirming its accuracy claim and quantifying, for
+the first time, the performance cost that comes with it.
+
+Concrete next steps, in priority order:
+\begin{enumerate}
+  \item a repeat of Section~\ref{sec:avx512} on a Xeon-class AVX-512
+    server, on a different day;
+  \item cross-machine confirmation of Table~\ref{tab:dumas-perf}'s
+    performance-cost figure on \texttt{glogin} and native Windows;
+  \item project-wide adoption of Section~\ref{sec:repeated}'s
+    bootstrap-CI protocol beyond Section~\ref{sec:vmcase}; and
+  \item running the measurement-bias protocol from
+    Section~\ref{sec:vmcase} \emph{inside} WSL2/Hyper-V itself (not
+    just outside it), to settle directly whether the original
+    scheduling win was virtualization-compensation rather than merely
+    unreproduced elsewhere.
+\end{enumerate}
+One further direction is noted but deliberately not built out here. The
+same statistical and hardware-counter measurement rigor this paper
+applies throughout is largely absent from the fast-growing LLM-driven
+kernel-generation literature (Section~\ref{sec:related}), which is
+presently evaluated mostly on single or best-of-$N$ wall-clock numbers.
+Using this project's harness to evaluate an LLM-generated kernel under
+the same protocol would be a natural, low-risk extension, left for
+future work rather than claimed as a contribution of this paper.
 
 \begin{acks}
 We thank the Virginia Tech Department of Computer Science for access to
 the \texttt{glogin.cs.vt.edu} compute cluster used throughout
 Sections~\ref{sec:supporting} and~\ref{sec:dumas}'s hardware-counter,
-cross-compiler, and accuracy/performance measurements.
-\todo{Add any additional funding, advisor, or reviewer acknowledgments here.}
+cross-compiler, and accuracy/performance measurements. This work received
+no external funding.
+
+An AI coding and writing assistant (Claude, Anthropic) was used
+throughout this project's development: drafting and revising this
+manuscript's text, writing and debugging the C, assembly, Python, and
+shell code implementing and benchmarking the algorithms discussed
+(including the correctness fixes of Section~\ref{sec:audit} and the
+reproducibility harness of Section~\ref{sec:artifact}), generating the
+figures, and assisting with the statistical analysis of the collected
+data. The author reviewed, verified, and takes full responsibility for
+all code, data, analysis, and text in this Work.
 \end{acks}
 
 \bibliographystyle{ACM-Reference-Format}
